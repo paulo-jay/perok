@@ -29,14 +29,42 @@ export interface Transport {
    */
   readonly counters: SequenceCounters;
   readonly connected: boolean;
-  write(service: string, characteristic: string, frame: Uint8Array): Promise<void>;
-  subscribe(
+
+  /**
+   * `withoutResponse` skips the acknowledgement round trip. The `fa00`
+   * characteristics are declared write-without-response in the specification,
+   * and reliability for the commands that need it is handled by ARSDK's own
+   * ack flag, not by the Bluetooth layer. Use it for the 50 ms setpoint
+   * stream, where an acknowledgement per frame costs more than a lost frame.
+   */
+  write(
     service: string,
     characteristic: string,
-    handler: (data: DataView) => void,
+    frame: Uint8Array,
+    options?: { withoutResponse?: boolean },
   ): Promise<void>;
+
+  /**
+   * Registers a listener for every notification, with no GATT work: the
+   * characteristics are subscribed once, when the transport opens. Subscribing
+   * again would re-run `startNotifications` on all ten, and Chrome serialises
+   * GATT operations — ten redundant ones land precisely when the pilot is
+   * pressing take-off.
+   */
+  onNotification(handler: (data: DataView) => void): void;
+
+  /** Rough counters, for diagnosing a sluggish link from inside the app. */
+  readonly stats: TransportStats;
+
   disconnect(): void;
 }
+
+export type TransportStats = {
+  writes: number;
+  notifications: number;
+  lastWriteMs: number;
+  maxWriteMs: number;
+};
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -84,24 +112,40 @@ export async function openTransport(
 
   device.addEventListener('gattserverdisconnected', handleDisconnect);
 
+  const listeners: ((data: DataView) => void)[] = [];
+  const stats: TransportStats = {
+    writes: 0,
+    notifications: 0,
+    lastWriteMs: 0,
+    maxWriteMs: 0,
+  };
+
   const transport: Transport = {
     counters: new SequenceCounters(),
+    stats,
 
     get connected(): boolean {
       return live && server.connected;
     },
 
-    async write(service, characteristic, frame) {
+    async write(service, characteristic, frame, options) {
       const target = await resolveCharacteristic(service, characteristic);
-      await target.writeValue(frame);
+      const started = performance.now();
+
+      if (options?.withoutResponse && target.writeValueWithoutResponse) {
+        await target.writeValueWithoutResponse(frame);
+      } else {
+        await target.writeValue(frame);
+      }
+
+      const elapsed = performance.now() - started;
+      stats.writes += 1;
+      stats.lastWriteMs = Math.round(elapsed);
+      stats.maxWriteMs = Math.max(stats.maxWriteMs, stats.lastWriteMs);
     },
 
-    async subscribe(service, characteristic, handler) {
-      const target = await resolveCharacteristic(service, characteristic);
-      await target.startNotifications();
-      target.addEventListener('characteristicvaluechanged', () => {
-        if (target.value) handler(target.value);
-      });
+    onNotification(handler) {
+      listeners.push(handler);
     },
 
     disconnect() {
@@ -111,9 +155,16 @@ export async function openTransport(
     },
   };
 
-  // Order imposed by the spike: sequential subscriptions, wait, handshake.
+  // Subscribed once, here, and never again: the order is imposed by the spike
+  // and every extra `startNotifications` is a serialised GATT operation.
   for (const [service, characteristic] of NOTIFY_CHARS) {
-    await transport.subscribe(service, characteristic, () => {});
+    const target = await resolveCharacteristic(service, characteristic);
+    await target.startNotifications();
+    target.addEventListener('characteristicvaluechanged', () => {
+      if (!target.value) return;
+      stats.notifications += 1;
+      for (const listener of listeners) listener(target.value);
+    });
   }
 
   await sleep(HANDSHAKE_DELAY_MS);

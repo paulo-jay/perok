@@ -10,6 +10,23 @@ const connected = async () => {
   return { t, d };
 };
 
+test('init registers one notification listener and subscribes nothing', async () => {
+  // Re-subscribing all ten characteristics put ten serialised GATT operations
+  // between the handshake and the pilot's first command.
+  const t = new FakeTransport();
+  const d = new Drone(t);
+  await d.init();
+  assert.equal(t.handlers.length, 1);
+});
+
+test('commands keep their acknowledgement', async () => {
+  // Only the setpoint stream trades reliability for latency.
+  const { t, d } = await connected();
+  await d.takeOff();
+  assert.equal(t.on('fa0b')[0].withoutResponse, false);
+  d.handleDisconnect();
+});
+
 test('takeOff sends flatTrim then takeOff, then starts the loop', async () => {
   const { t, d } = await connected();
   await d.takeOff();

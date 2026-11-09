@@ -1,7 +1,12 @@
-import type { Transport } from '../transport/ble.js';
+import type { Transport, TransportStats } from '../transport/ble.js';
 import { SequenceCounters } from '../protocol/sequence.js';
 
-export type Written = { service: string; characteristic: string; frame: number[] };
+export type Written = {
+  service: string;
+  characteristic: string;
+  frame: number[];
+  withoutResponse: boolean;
+};
 
 /**
  * Transport double: makes the command loop and the drone model testable under
@@ -10,44 +15,55 @@ export type Written = { service: string; characteristic: string; frame: number[]
 export class FakeTransport implements Transport {
   readonly counters = new SequenceCounters();
   readonly written: Written[] = [];
-  /**
-   * One characteristic can carry several listeners, as the real transport
-   * does by appending event listeners. Keeping a single handler per
-   * characteristic would silently drop the first subscriber.
-   */
-  readonly handlers = new Map<string, ((data: DataView) => void)[]>();
+  /** Notification listeners, fanned out exactly as the real transport does. */
+  readonly handlers: ((data: DataView) => void)[] = [];
+  readonly stats: TransportStats = {
+    writes: 0,
+    notifications: 0,
+    lastWriteMs: 0,
+    maxWriteMs: 0,
+  };
   failNextWrite = false;
   /** Persistent failures, to tell a one-off incident from a broken link. */
   failWrites = false;
   connected = true;
 
-  async write(service: string, characteristic: string, frame: Uint8Array): Promise<void> {
+  async write(
+    service: string,
+    characteristic: string,
+    frame: Uint8Array,
+    options?: { withoutResponse?: boolean },
+  ): Promise<void> {
     if (this.failWrites) throw new Error('write failed');
     if (this.failNextWrite) {
       this.failNextWrite = false;
       throw new Error('write failed');
     }
-    this.written.push({ service, characteristic, frame: Array.from(frame) });
+    this.written.push({
+      service,
+      characteristic,
+      frame: Array.from(frame),
+      withoutResponse: options?.withoutResponse === true,
+    });
+    this.stats.writes += 1;
   }
 
-  async subscribe(
-    _service: string,
-    characteristic: string,
-    handler: (data: DataView) => void,
-  ): Promise<void> {
-    const existing = this.handlers.get(characteristic) ?? [];
-    existing.push(handler);
-    this.handlers.set(characteristic, existing);
+  onNotification(handler: (data: DataView) => void): void {
+    this.handlers.push(handler);
   }
 
   disconnect(): void {
     this.connected = false;
   }
 
-  /** Simulates a notification from the drone. */
-  emit(characteristic: string, ...bytes: number[]): void {
+  /**
+   * Simulates a notification. The characteristic is kept for readability only:
+   * routing is by frame header, exactly as in the real transport.
+   */
+  emit(_characteristic: string, ...bytes: number[]): void {
     const data = new DataView(new Uint8Array(bytes).buffer);
-    for (const handler of this.handlers.get(characteristic) ?? []) handler(data);
+    this.stats.notifications += 1;
+    for (const handler of this.handlers) handler(data);
   }
 
   on(characteristic: string): Written[] {

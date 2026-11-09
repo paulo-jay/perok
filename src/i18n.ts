@@ -58,6 +58,7 @@ type Dict = {
   maxVerticalSpeed: string;
   maxRotationSpeed: string;
   limitsUnavailable: string;
+  diagnostics: string;
   flightLanded: string;
   flightTakingOff: string;
   flightHovering: string;
@@ -115,6 +116,7 @@ const FR: Dict = {
   maxVerticalSpeed: 'Vitesse verticale max',
   maxRotationSpeed: 'Vitesse de rotation max',
   limitsUnavailable: 'Limites de vol disponibles une fois le drone connecté.',
+  diagnostics: 'Liaison',
   flightLanded: 'posé',
   flightTakingOff: 'décollage',
   flightHovering: 'stationnaire',
@@ -170,6 +172,7 @@ const EN: Dict = {
   maxVerticalSpeed: 'Max vertical speed',
   maxRotationSpeed: 'Max rotation speed',
   limitsUnavailable: 'Flight limits available once the drone is connected.',
+  diagnostics: 'Link',
   flightLanded: 'landed',
   flightTakingOff: 'taking off',
   flightHovering: 'hovering',

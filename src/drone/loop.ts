@@ -69,7 +69,12 @@ export class CommandLoop {
     const frame = pcmd(this.counters.next(CHAR.PCMD), this.axes, active);
 
     try {
-      await this.transport.write(SERVICE.CMD, CHAR.PCMD, frame);
+      // Without response: `fa0a` is declared write-without-response, and at
+      // twenty frames a second an acknowledgement round trip per frame costs
+      // far more than a lost frame — the next setpoint is 50 ms away.
+      await this.transport.write(SERVICE.CMD, CHAR.PCMD, frame, {
+        withoutResponse: true,
+      });
       this.failures = 0;
     } catch {
       this.failures += 1;

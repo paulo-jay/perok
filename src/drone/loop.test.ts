@@ -17,6 +17,17 @@ test('the loop sends continuously, even at neutral', async () => {
   assert.equal(sent[0].frame[6], 0, 'flag at 0 when neutral');
 });
 
+test('setpoints are written without an acknowledgement round trip', async () => {
+  // `fa0a` is declared write-without-response. An acknowledgement per frame,
+  // twenty times a second, is what made the controls go unresponsive.
+  const t = new FakeTransport();
+  const loop = loopOn(t);
+  loop.start();
+  await sleep(25);
+  loop.stop();
+  assert.equal(t.on('fa0a')[0].withoutResponse, true);
+});
+
 test('setAxes raises the flag and passes the axes through', async () => {
   const t = new FakeTransport();
   const loop = loopOn(t);

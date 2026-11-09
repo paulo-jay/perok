@@ -68,6 +68,7 @@ const updateRow = byId('update-row');
 const updateLabel = byId('update-label');
 const updateApplyBtn = byId<HTMLButtonElement>('update-apply');
 const versionValue = byId('version-value');
+const diagnosticsValue = byId('diagnostics-value');
 
 const flatTrimBtn = byId<HTMLButtonElement>('flattrim');
 const flipBtn = byId<HTMLButtonElement>('flip');
@@ -82,6 +83,7 @@ const lightIntensity = byId<HTMLInputElement>('light-intensity');
 const updates = watchForUpdates();
 let pendingUpdate = false;
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+let renderQueued = false;
 let renderedLimits: readonly LimitName[] = [];
 const limitControls = new Map<LimitName, { input: HTMLInputElement; show: () => void }>();
 
@@ -305,6 +307,13 @@ function renderStatus(): void {
 
   lightRow.hidden = lastState?.light == null;
 
+  // Notifications in, writes out, last and worst write latency. A congested
+  // link shows as a high latency; a slow interface would not.
+  const stats = current?.stats;
+  diagnosticsValue.textContent = stats
+    ? `${stats.notifications} ⇣ · ${stats.writes} ⇡ · ${stats.lastWriteMs}/${stats.maxWriteMs} ms`
+    : '—';
+
   // The settings panel overlays the flight controls, so it is locked while the
   // drone is in the air; the label says why rather than leaving a dead button.
   const airborne = current !== null && current.airborne;
@@ -378,10 +387,23 @@ function onState(state: DroneState): void {
     );
   }
 
-  // A newly reported limit adds a row, so the panel is rebuilt, not just
-  // relabelled.
-  buildLimitRows();
-  renderStatus();
+  queueRender();
+}
+
+/**
+ * Coalesces repainting to one pass per frame. Asking the drone for its whole
+ * state produces a burst of notifications, and repainting the settings panel
+ * synchronously on each of them put dozens of DOM passes between the pilot and
+ * their controls.
+ */
+function queueRender(): void {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    buildLimitRows();
+    renderStatus();
+  });
 }
 
 /* ---------- Sticks ---------- */

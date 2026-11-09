@@ -12,6 +12,14 @@ interface BluetoothRemoteGATTCharacteristic extends EventTarget {
    * `Uint8Array<ArrayBufferLike>`. So we declare only the actual usage.
    */
   writeValue(value: Uint8Array): Promise<void>;
+  /**
+   * Optional: `writeValue` is deprecated and Chrome treats it as a write
+   * *with* response, which costs an acknowledgement round trip per frame. The
+   * `fa00` characteristics are declared write-without-response, so the 50 ms
+   * setpoint stream should use this. Declared optional so an engine that lacks
+   * it falls back rather than failing.
+   */
+  writeValueWithoutResponse?(value: Uint8Array): Promise<void>;
   startNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
 }
 

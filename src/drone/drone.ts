@@ -27,7 +27,7 @@ import {
   type PictureOutcome,
 } from '../protocol/notifications.js';
 import type { Axes } from '../axes.js';
-import type { Transport } from '../transport/ble.js';
+import type { Transport, TransportStats } from '../transport/ble.js';
 
 export interface DroneState {
   connection: 'disconnected' | 'connected';
@@ -79,18 +79,27 @@ export class Drone {
     return this.flightLimits;
   }
 
-  async init(): Promise<void> {
+  /** Link counters, so a sluggish session can be diagnosed from the app. */
+  get stats(): TransportStats {
+    return this.transport.stats;
+  }
+
+  init(): Promise<void> {
     // Every notification goes through one handler that identifies it by its
     // frame header. Reading the flight state from a fixed byte of whatever
     // lands on `fb0e` was wrong: that characteristic's class also carries
     // `AlertStateChanged`, whose `cut_out` value is the same byte as
     // `hovering` — so stopping the propellers by hand could report a hovering
     // drone and arm a flip on the ground.
-    for (const [service, characteristic] of NOTIFY_CHARS) {
-      await this.transport.subscribe(service, characteristic, (data) => {
-        this.handleNotification(data);
-      });
-    }
+    //
+    // Registering a listener costs no GATT work: the characteristics were
+    // subscribed once when the transport opened. Subscribing them again here
+    // put ten serialised GATT operations between the handshake and the
+    // pilot's first command.
+    this.transport.onNotification((data) => {
+      this.handleNotification(data);
+    });
+    return Promise.resolve();
   }
 
   private handleNotification(data: DataView): void {
