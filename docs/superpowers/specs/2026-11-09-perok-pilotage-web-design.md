@@ -136,7 +136,9 @@ Ce qui ferait échouer le projet même s'il « fonctionne » techniquement :
   (décision de Paul). Motif : le typage protège un code qui manipule des
   tampons d'octets et des compteurs de séquence, où une erreur se paie par un
   drone qui part de travers sans message d'erreur ; l'absence de bundler
-  protège la longévité du projet.
+  protège la longévité du projet. Les dépendances de développement se limitent
+  à `typescript` et `@types/node` — cette seconde, validée par Paul, ne porte
+  aucun code exécutable, et `node:test` n'est pas typable sans elle.
 - Dépôt `perok`, **branche d'intégration `master`** (et non `main`), qui est
   aussi la branche source du déploiement.
 - Le BLE est à faible débit : la boucle de commande doit rester modeste.
