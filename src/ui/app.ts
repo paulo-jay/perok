@@ -2,6 +2,7 @@ import { openTransport, requestDrone, type Transport } from '../transport/ble.js
 import { Drone, type DroneState } from '../drone/drone.js';
 import { DualStickInput } from '../input/dualstick.js';
 import { SlideToConfirm } from './slide-to-confirm.js';
+import { watchForUpdates } from './updates.js';
 import { NEUTRAL, type Axes } from '../axes.js';
 import { LANGS, LANG_NAMES, resolveLang, t, type Key, type Lang } from '../i18n.js';
 
@@ -58,6 +59,13 @@ const settingsPanel = byId('settings');
 const settingsOpenBtn = byId<HTMLButtonElement>('settings-open');
 const settingsCloseBtn = byId<HTMLButtonElement>('settings-close');
 const languageChoices = byId('language-choices');
+const updateRow = byId('update-row');
+const updateLabel = byId('update-label');
+const updateApplyBtn = byId<HTMLButtonElement>('update-apply');
+const versionValue = byId('version-value');
+
+const updates = watchForUpdates();
+let pendingUpdate = false;
 
 let transport: Transport | null = null;
 let drone: Drone | null = null;
@@ -161,10 +169,31 @@ function renderStatus(): void {
   );
 }
 
+/**
+ * An update is applied at once when nothing is connected. With a live session
+ * it waits: reloading would drop the Bluetooth link, and doing that to someone
+ * holding an airborne drone is not acceptable.
+ */
+function renderUpdate(): void {
+  updateRow.hidden = !pendingUpdate;
+  const waiting = drone !== null;
+  updateLabel.textContent = t(lang, waiting ? 'updateWaitsForLanding' : 'updateAvailable');
+  updateApplyBtn.hidden = waiting;
+}
+
+function showVersion(): void {
+  void updates.version().then((version) => {
+    if (!version) return;
+    const build = version.replace(/^perok-/, '');
+    versionValue.textContent = build.startsWith('__') ? build : build.slice(0, 7);
+  });
+}
+
 function render(): void {
   applyStaticLabels();
   buildLanguageChoices();
   renderStatus();
+  renderUpdate();
 }
 
 function onState(state: DroneState): void {
@@ -222,6 +251,9 @@ function teardown(): void {
   sentinel = null;
   showAxes(NEUTRAL);
   renderStatus();
+
+  // The session is over: a deferred update can land now.
+  if (pendingUpdate) updates.apply();
 }
 
 async function connect(): Promise<void> {
@@ -312,6 +344,8 @@ landBtn.addEventListener('click', () => {
 settingsOpenBtn.addEventListener('click', () => {
   if (drone?.airborne) return;
   settingsPanel.hidden = false;
+  // Read it again on open: the worker may have claimed the page since load.
+  showVersion();
 });
 
 settingsCloseBtn.addEventListener('click', () => {
@@ -323,5 +357,19 @@ settingsPanel.addEventListener('click', (event) => {
   if (event.target === settingsPanel) settingsPanel.hidden = true;
 });
 
+updateApplyBtn.addEventListener('click', () => {
+  updates.apply();
+});
+
+updates.onReady(() => {
+  pendingUpdate = true;
+  if (drone === null) {
+    updates.apply();
+    return;
+  }
+  renderUpdate();
+});
+
 render();
+showVersion();
 showAxes(NEUTRAL);

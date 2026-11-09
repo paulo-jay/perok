@@ -27,6 +27,7 @@ const SHELL = [
   'icons/favicon.ico',
   'dist/ui/app.js',
   'dist/ui/slide-to-confirm.js',
+  'dist/ui/updates.js',
   'dist/drone/drone.js',
   'dist/drone/loop.js',
   'dist/input/dualstick.js',
@@ -57,6 +58,17 @@ self.addEventListener('activate', (event) => {
       )
       .then(() => self.clients.claim()),
   );
+});
+
+/*
+ * The page asks which build is actually serving it. Without this, "is my phone
+ * up to date?" is unanswerable from the app itself, which is precisely how an
+ * update problem goes unnoticed.
+ */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'version' && event.ports[0]) {
+    event.ports[0].postMessage({ version: CACHE });
+  }
 });
 
 /*

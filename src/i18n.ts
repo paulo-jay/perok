@@ -34,6 +34,10 @@ type Dict = {
   close: string;
   language: string;
   settingsLockedInFlight: string;
+  version: string;
+  updateAvailable: string;
+  applyUpdate: string;
+  updateWaitsForLanding: string;
   flightLanded: string;
   flightTakingOff: string;
   flightHovering: string;
@@ -64,6 +68,10 @@ const FR: Dict = {
   close: 'Fermer',
   language: 'Langue',
   settingsLockedInFlight: 'Posez le drone pour ouvrir les paramètres.',
+  version: 'Version',
+  updateAvailable: 'Mise à jour disponible',
+  applyUpdate: 'Appliquer',
+  updateWaitsForLanding: 'Mise à jour prête, appliquée dès la déconnexion.',
   flightLanded: 'posé',
   flightTakingOff: 'décollage',
   flightHovering: 'stationnaire',
@@ -92,6 +100,10 @@ const EN: Dict = {
   close: 'Close',
   language: 'Language',
   settingsLockedInFlight: 'Land the drone to open the settings.',
+  version: 'Version',
+  updateAvailable: 'Update available',
+  applyUpdate: 'Apply',
+  updateWaitsForLanding: 'Update ready, applied as soon as you disconnect.',
   flightLanded: 'landed',
   flightTakingOff: 'taking off',
   flightHovering: 'hovering',

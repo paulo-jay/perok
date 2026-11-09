@@ -66,17 +66,37 @@
           <span class="panel-label" data-i18n="language">Language</span>
           <div class="choices" id="language-choices"></div>
         </div>
+
+        <div class="panel-row" id="update-row" hidden>
+          <span class="panel-label" id="update-label" data-i18n="updateAvailable">
+            Update available
+          </span>
+          <button id="update-apply" class="choice" type="button" data-i18n="applyUpdate">
+            Apply
+          </button>
+        </div>
+
+        <div class="panel-row">
+          <span class="panel-label" data-i18n="version">Version</span>
+          <span class="panel-value" id="version-value">—</span>
+        </div>
       </div>
     </div>
 
     <script type="module" src="dist/ui/app.js"></script>
     <script>
       // Relative path: the scope must follow the GitHub Pages sub-path.
+      // `updateViaCache: 'none'` keeps the HTTP cache out of the way, so an
+      // update check always sees the worker that is actually deployed.
+      // Registration stays inline so the offline shell survives even if the
+      // module graph fails to load; src/ui/updates.ts drives the checks.
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js').catch((error) => {
-            console.error('Service worker not registered', error);
-          });
+          navigator.serviceWorker
+            .register('sw.js', { updateViaCache: 'none' })
+            .catch((error) => {
+              console.error('Service worker not registered', error);
+            });
         });
       }
     </script>

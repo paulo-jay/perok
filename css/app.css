@@ -153,6 +153,16 @@ body.connected .connect {
   color: var(--muted);
 }
 
+.panel-value {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+#update-row:not([hidden]) .panel-label {
+  color: var(--ok);
+}
+
 .choices {
   display: flex;
   gap: 6px;
