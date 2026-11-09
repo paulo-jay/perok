@@ -1,0 +1,58 @@
+name: Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # La suite doit passer avant toute mise en ligne : les erreurs d'octets
+      # et de signe ne se voient pas autrement qu'en vol.
+      - run: npm test
+
+      - run: npm run build
+
+      - name: Rassembler le site
+        run: |
+          mkdir -p site/dist
+          cp index.html manifest.webmanifest sw.js site/
+          cp -r css icons site/
+          # dist/ est produit ici, jamais commité ; les fichiers de test et la
+          # doublure de transport n'ont rien à faire en ligne.
+          rsync -a --exclude '*.test.js' --exclude '*.test.js.map' \
+                   --exclude 'testing/' dist/ site/dist/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
