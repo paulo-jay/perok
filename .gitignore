@@ -2,3 +2,5 @@
 .superpowers/
 .arsdk-ref/
 spike/
+node_modules/
+dist/

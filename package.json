@@ -1,0 +1,16 @@
+{
+  "name": "perok",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pilotage web d'un minidrone Parrot Airborne Night en Bluetooth basse consommation",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test \"dist/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
