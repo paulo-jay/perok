@@ -4,26 +4,41 @@ export type FlightState =
   | 'landed'
   | 'takingOff'
   | 'hovering'
-  | 'unknown'
+  | 'flying'
   | 'landing'
-  | 'cutOff';
+  | 'emergency'
+  | 'rolling'
+  | 'init'
+  /** Not a drone value: our answer when a frame does not carry a known one. */
+  | 'unknown';
 
-/** The order is the drone's own enumeration: the index carries the meaning. */
+/**
+ * `FlyingStateChanged` in `minidrone.xml`, in declaration order. The spike had
+ * index 3 as "unknown" and index 5 as a cut-off; the specification says
+ * `flying` and `emergency`. The specification wins — index 3 is the state a
+ * drone reports for most of a real flight.
+ */
 const STATES: readonly FlightState[] = [
   'landed',
   'takingOff',
   'hovering',
-  'unknown',
+  'flying',
   'landing',
-  'cutOff',
+  'emergency',
+  'rolling',
+  'init',
 ];
 
-/** The `fb0e` notification carries the flight state in byte 6. */
+/** Arguments start at byte 6, and the state enum's first byte carries it. */
 const FLIGHT_STATE_OFFSET = 6;
+
+function stateFromIndex(index: number): FlightState {
+  return STATES[index] ?? 'unknown';
+}
 
 export function decodeFlightState(data: DataView): FlightState {
   if (data.byteLength <= FLIGHT_STATE_OFFSET) return 'unknown';
-  return STATES[data.getUint8(FLIGHT_STATE_OFFSET)] ?? 'unknown';
+  return stateFromIndex(data.getUint8(FLIGHT_STATE_OFFSET));
 }
 
 /** The `fb0f` notification carries the battery level in its last byte. */
@@ -99,16 +114,27 @@ export type LimitName =
   | 'maxRotationSpeed';
 
 export type Notification =
+  | { kind: 'flight'; state: FlightState }
+  | { kind: 'battery'; percent: number }
   | { kind: 'limit'; name: LimitName; range: SettingRange }
   | { kind: 'picture'; outcome: PictureOutcome }
-  | { kind: 'light'; state: LightState };
+  | { kind: 'light'; state: LightState | null };
 
+const PROJECT_COMMON = 0;
 const PROJECT_MINIDRONE = 2;
 
+/** Class ids repeat across projects, so the project must be checked first. */
+const CLASS_COMMON_STATE = 5;
+
+const CLASS_MEDIA_RECORD_EVENT = 2;
+const CLASS_PILOTING_STATE = 3;
 const CLASS_SPEED_SETTINGS_STATE = 5;
 const CLASS_PILOTING_SETTINGS_STATE = 9;
-const CLASS_MEDIA_RECORD_EVENT = 2;
 const CLASS_USB_ACCESSORY_STATE = 15;
+
+/** `list_flags` bitfield on a MAP_ITEM notification. */
+const LIST_FLAG_EMPTY = 0x04;
+const LIST_FLAG_REMOVE = 0x08;
 
 /** `(class, command)` to limit name, for the four settings-state reports. */
 const LIMIT_ROUTES: ReadonlyArray<readonly [number, number, LimitName]> = [
@@ -128,7 +154,23 @@ const LIMIT_ROUTES: ReadonlyArray<readonly [number, number, LimitName]> = [
  */
 export function routeNotification(data: DataView): Notification | null {
   const frame = parseFrame(data);
-  if (!frame || frame.project !== PROJECT_MINIDRONE) return null;
+  if (!frame) return null;
+
+  if (frame.project === PROJECT_COMMON) {
+    if (frame.cls === CLASS_COMMON_STATE && frame.cmd === 1) {
+      return { kind: 'battery', percent: frame.readU8(0) };
+    }
+    return null;
+  }
+
+  if (frame.project !== PROJECT_MINIDRONE) return null;
+
+  // The flight state must be identified by its command, not by its position.
+  // `PilotingState` also carries `AlertStateChanged`, whose `cut_out` value is
+  // 2 — the same byte as `hovering`.
+  if (frame.cls === CLASS_PILOTING_STATE && frame.cmd === 1) {
+    return { kind: 'flight', state: stateFromIndex(frame.readEnum(0)) };
+  }
 
   for (const [cls, cmd, name] of LIMIT_ROUTES) {
     if (frame.cls === cls && frame.cmd === cmd) {
@@ -141,6 +183,15 @@ export function routeNotification(data: DataView): Notification | null {
   }
 
   if (frame.cls === CLASS_USB_ACCESSORY_STATE && frame.cmd === 0) {
+    const flags = frame.readU8(6);
+
+    // "Empty: indicate the list is empty (implies First/Last). All other
+    // arguments should be ignored." A drone with no accessory is the likeliest
+    // sender, and mistaking it for a light would make the LED probe answer yes
+    // where the drone said no.
+    if (flags & LIST_FLAG_EMPTY) return null;
+    if (flags & LIST_FLAG_REMOVE) return { kind: 'light', state: null };
+
     return { kind: 'light', state: decodeLightState(frame) };
   }
 

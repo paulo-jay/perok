@@ -1,5 +1,5 @@
 import { CHAR, NOTIFY_CHARS, SERVICE, uuid } from '../protocol/uuids.js';
-import { currentDate } from '../protocol/frames.js';
+import { allSettings, allStates, currentDate } from '../protocol/frames.js';
 import { SequenceCounters } from '../protocol/sequence.js';
 
 /**
@@ -117,7 +117,18 @@ export async function openTransport(
   }
 
   await sleep(HANDSHAKE_DELAY_MS);
-  await transport.write(SERVICE.CMD, CHAR.CMD, currentDate(transport.counters.next(CHAR.CMD)));
+
+  const send = (build: (seq: number) => Uint8Array): Promise<void> =>
+    transport.write(SERVICE.CMD, CHAR.CMD, build(transport.counters.next(CHAR.CMD)));
+
+  await send(currentDate);
+
+  // Then ask for the whole current state. The drone reports a setting when it
+  // changes, not on connection, so without these two requests the flight
+  // limits and the accessory list never arrive and every control that waits on
+  // them stays inert.
+  await send(allSettings);
+  await send(allStates);
 
   return transport;
 }

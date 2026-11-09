@@ -80,18 +80,12 @@ export class Drone {
   }
 
   async init(): Promise<void> {
-    // Flight state and battery keep their own handlers: they are the two
-    // notifications proven in flight, and they are left exactly as they were.
-    await this.transport.subscribe(SERVICE.NOTIFY, CHAR.FLIGHT_STATE, (data) => {
-      this.update({ flight: decodeFlightState(data) });
-    });
-    await this.transport.subscribe(SERVICE.NOTIFY, CHAR.BATTERY, (data) => {
-      this.update({ battery: decodeBattery(data) });
-    });
-
-    // Everything added since is told apart by its frame header, so it does not
-    // matter which characteristic carries it — and that mapping is not
-    // documented anywhere we could rely on.
+    // Every notification goes through one handler that identifies it by its
+    // frame header. Reading the flight state from a fixed byte of whatever
+    // lands on `fb0e` was wrong: that characteristic's class also carries
+    // `AlertStateChanged`, whose `cut_out` value is the same byte as
+    // `hovering` — so stopping the propellers by hand could report a hovering
+    // drone and arm a flip on the ground.
     for (const [service, characteristic] of NOTIFY_CHARS) {
       await this.transport.subscribe(service, characteristic, (data) => {
         this.handleNotification(data);
@@ -104,6 +98,12 @@ export class Drone {
     if (!notification) return;
 
     switch (notification.kind) {
+      case 'flight':
+        this.update({ flight: notification.state });
+        return;
+      case 'battery':
+        this.update({ battery: notification.percent });
+        return;
       case 'limit':
         this.flightLimits.report(notification.name, notification.range);
         this.update({});
@@ -113,10 +113,12 @@ export class Drone {
         return;
       case 'light':
         this.update({
-          light: {
-            id: notification.state.id,
-            intensity: notification.state.intensity,
-          },
+          light: notification.state
+            ? {
+                id: notification.state.id,
+                intensity: notification.state.intensity,
+              }
+            : null,
         });
         return;
     }

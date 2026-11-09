@@ -294,6 +294,13 @@ body.connected .connect {
   min-width: 0;
 }
 
+/* The generated limit slider needs the same treatment as the light one, or the
+   longest label plus the readout squeezes it off a phone screen. */
+#limit-rows input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .limit-value {
   color: var(--text);
   font-variant-numeric: tabular-nums;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FlightLimits } from './limits.js';
+import { FlightLimits, sameLimitSet } from './limits.js';
 
 const range = { current: 3, min: 1, max: 10 };
 
@@ -34,6 +34,23 @@ test('limits are independent of one another', () => {
   l.report('maxTilt', { current: 20, min: 5, max: 30 });
   assert.equal(l.sanitize('maxTilt', 100), 30);
   assert.equal(l.sanitize('maxVerticalSpeed', 1), null);
+});
+
+test('a non-finite value is refused rather than encoded', () => {
+  // setLimit is a public entry point taking a raw number; NaN would clamp to
+  // NaN and go out as a float to a flying drone.
+  const l = new FlightLimits();
+  l.report('maxAltitude', range);
+  assert.equal(l.sanitize('maxAltitude', NaN), null);
+  assert.equal(l.sanitize('maxAltitude', Infinity), null);
+  assert.equal(l.sanitize('maxAltitude', -Infinity), null);
+});
+
+test('sameLimitSet tells whether the rendered rows are still the right ones', () => {
+  assert.equal(sameLimitSet(['maxAltitude'], ['maxAltitude']), true);
+  assert.equal(sameLimitSet([], []), true);
+  assert.equal(sameLimitSet(['maxAltitude'], ['maxTilt']), false);
+  assert.equal(sameLimitSet(['maxAltitude', 'maxTilt'], ['maxAltitude']), false);
 });
 
 test('a later report replaces the earlier one without duplicating it', () => {

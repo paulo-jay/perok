@@ -162,9 +162,32 @@ Ce qui ferait échouer le projet même s'il « fonctionne » techniquement :
   **`fb0e`** (état de vol), **`fb0f`** (batterie).
 - Chaque caractéristique d'écriture porte **son propre compteur de séquence**,
   incrémenté à chaque envoi.
-- États de vol, dans cet ordre : `fsLanded`, `fsTakingOff`, `fsHovering`,
-  `fsUnknown`, `fsLanding`, `fsCutOff`. L'octet d'index 6 de la notification
-  `fb0e` porte l'état.
+- **États de vol — correction du 2026-11-09.** Le spike donnait `fsLanded`,
+  `fsTakingOff`, `fsHovering`, `fsUnknown`, `fsLanding`, `fsCutOff`. La
+  spécification Parrot dit autre chose, et elle fait foi :
+  `landed=0, takingoff=1, hovering=2, **flying=3**, landing=4, emergency=5,
+  rolling=6, init=7`. L'index 3 n'est pas « inconnu » : c'est l'état que le
+  drone rapporte pendant l'essentiel d'un vol réel.
+- **Une notification doit être identifiée par son en-tête, jamais par la
+  position d'un octet.** La classe `PilotingState` ne porte pas que
+  `FlyingStateChanged` (commande 1) : elle porte aussi `AlertStateChanged`
+  (commande 2), dont la valeur `cut_out` vaut **2** — exactement celle de
+  `hovering`. Or arrêter le drone en lui présentant un carton, ce que
+  recommande la section sécurité de ce document, lève précisément cette
+  alerte. Lire l'octet d'index 6 de tout ce qui arrive sur `fb0e` rapporterait
+  donc un drone en stationnaire alors qu'il est au sol.
+- **Le drone ne livre pas ses réglages spontanément.** Il émet un `…Changed`
+  quand une valeur change, et répond à `common.Settings.AllSettings`
+  (projet 0, classe 2, commande 0) et `common.Common.AllStates` (classe 4,
+  commande 0) par son état complet. Sans ces deux requêtes après la poignée de
+  main, les limites de vol et la liste des accessoires n'arrivent jamais.
+- `common.CommonState.BatteryStateChanged` est projet 0, classe 5, commande 1,
+  argument `percent:u8`.
+- Les notifications de type `MAP_ITEM` portent un dernier octet `list_flags` :
+  `0x01` premier, `0x02` dernier, `0x04` **liste vide — tous les autres
+  arguments doivent être ignorés**, `0x08` suppression. Prendre une liste vide
+  pour un élément réel ferait répondre « oui » à une sonde dont le drone a dit
+  « non ».
 - La notification `fb0f` porte le niveau de batterie dans son dernier octet.
 - `requestDevice` doit déclarer les services dans `optionalServices`, sinon
   l'accès GATT est refusé après connexion.

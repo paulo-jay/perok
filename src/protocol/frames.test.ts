@@ -15,6 +15,8 @@ import {
   maxRotationSpeed,
   takePicture,
   lightControl,
+  allSettings,
+  allStates,
 } from './frames.js';
 
 const bytes = (f: Uint8Array) => Array.from(f);
@@ -76,6 +78,14 @@ test('flip takes a named direction and defaults to the proven one', () => {
 
 test('takePicture uses PictureV2, which takes no argument', () => {
   assert.deepEqual(bytes(takePicture(7)), [4, 7, 2, 6, 1, 0]);
+});
+
+test('the state requests carry no argument', () => {
+  // The drone does not volunteer its settings; it answers when asked.
+  // common.Settings.AllSettings = project 0, class 2, command 0.
+  // common.Common.AllStates    = project 0, class 4, command 0.
+  assert.deepEqual(bytes(allSettings(7)), [4, 7, 0, 2, 0, 0]);
+  assert.deepEqual(bytes(allStates(7)), [4, 7, 0, 4, 0, 0]);
 });
 
 test('lightControl carries id, a four-byte mode and an intensity', () => {

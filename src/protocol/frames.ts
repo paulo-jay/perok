@@ -10,6 +10,8 @@ const PROJECT_COMMON = 0;
 const PROJECT_MINIDRONE = 2;
 
 const CLASS_PILOTING = 0;
+/** `common.Settings`. */
+const CLASS_COMMON_SETTINGS = 2;
 /** `common.Common` — same id as Animations, but in another project. */
 const CLASS_COMMON = 4;
 /** `minidrone.Animations` — same id as Common, but in another project. */
@@ -26,6 +28,8 @@ const CMD_LANDING = 3;
 const CMD_EMERGENCY = 4;
 const CMD_FLIP = 0;
 const CMD_CURRENT_DATE = 1;
+const CMD_ALL_SETTINGS = 0;
+const CMD_ALL_STATES = 0;
 const CMD_MAX_ALTITUDE = 0;
 const CMD_MAX_TILT = 1;
 const CMD_MAX_VERTICAL_SPEED = 0;
@@ -77,6 +81,21 @@ export function currentDate(seq: number): Uint8Array {
     ...ascii,
     0,
   ]);
+}
+
+/*
+ * The drone does not volunteer its settings: it sends a `…Changed` frame when
+ * something changes, and answers these two requests with its whole current
+ * state. Without them the flight limits and the accessory list never arrive,
+ * and every control that waits on them stays inert.
+ */
+
+export function allSettings(seq: number): Uint8Array {
+  return encodeFrame(ACK, seq, PROJECT_COMMON, CLASS_COMMON_SETTINGS, CMD_ALL_SETTINGS);
+}
+
+export function allStates(seq: number): Uint8Array {
+  return encodeFrame(ACK, seq, PROJECT_COMMON, CLASS_COMMON, CMD_ALL_STATES);
 }
 
 export function flatTrim(seq: number): Uint8Array {

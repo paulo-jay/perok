@@ -61,9 +61,12 @@ type Dict = {
   flightLanded: string;
   flightTakingOff: string;
   flightHovering: string;
-  flightUnknown: string;
+  flightFlying: string;
   flightLanding: string;
-  flightCutOff: string;
+  flightEmergency: string;
+  flightRolling: string;
+  flightInit: string;
+  flightUnknown: string;
 };
 
 export type Key = keyof Dict;
@@ -115,9 +118,12 @@ const FR: Dict = {
   flightLanded: 'posé',
   flightTakingOff: 'décollage',
   flightHovering: 'stationnaire',
-  flightUnknown: 'indéterminé',
+  flightFlying: 'en vol',
   flightLanding: 'atterrissage',
-  flightCutOff: 'moteurs coupés',
+  flightEmergency: 'moteurs coupés',
+  flightRolling: 'roulage',
+  flightInit: 'initialisation',
+  flightUnknown: 'indéterminé',
 };
 
 const EN: Dict = {
@@ -167,9 +173,12 @@ const EN: Dict = {
   flightLanded: 'landed',
   flightTakingOff: 'taking off',
   flightHovering: 'hovering',
-  flightUnknown: 'unknown',
+  flightFlying: 'flying',
   flightLanding: 'landing',
-  flightCutOff: 'motors cut',
+  flightEmergency: 'motors cut',
+  flightRolling: 'rolling',
+  flightInit: 'starting up',
+  flightUnknown: 'unknown',
 };
 
 const DICTS: Record<Lang, Dict> = { fr: FR, en: EN };

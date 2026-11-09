@@ -5,7 +5,7 @@ import { SlideToConfirm } from './slide-to-confirm.js';
 import { watchForUpdates } from './updates.js';
 import { NEUTRAL, type Axes } from '../axes.js';
 import { LANGS, LANG_NAMES, resolveLang, t, type Key, type Lang } from '../i18n.js';
-import type { LimitName } from '../drone/limits.js';
+import { sameLimitSet, type LimitName } from '../drone/limits.js';
 import type { LightMode } from '../protocol/frames.js';
 
 const LOW_BATTERY = 10;
@@ -15,9 +15,12 @@ const FLIGHT_KEYS: Record<DroneState['flight'], Key> = {
   landed: 'flightLanded',
   takingOff: 'flightTakingOff',
   hovering: 'flightHovering',
-  unknown: 'flightUnknown',
+  flying: 'flightFlying',
   landing: 'flightLanding',
-  cutOff: 'flightCutOff',
+  emergency: 'flightEmergency',
+  rolling: 'flightRolling',
+  init: 'flightInit',
+  unknown: 'flightUnknown',
 };
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -79,6 +82,8 @@ const lightIntensity = byId<HTMLInputElement>('light-intensity');
 const updates = watchForUpdates();
 let pendingUpdate = false;
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+let renderedLimits: readonly LimitName[] = [];
+const limitControls = new Map<LimitName, { input: HTMLInputElement; show: () => void }>();
 
 const LIMIT_UNITS: Record<LimitName, string> = {
   maxAltitude: 'm',
@@ -191,13 +196,39 @@ function showNotice(text: string): void {
  * One row per limit the drone has reported, bounded by the range it gave. The
  * value is sent on release, not while dragging: a slider emitting on every
  * pixel would flood a Bluetooth link that carries the flight commands.
+ *
+ * Rows are rebuilt only when the *set* of reported limits changes. Rebuilding
+ * on every notification — a battery reading is enough — would detach an input
+ * mid-drag: the drag is cancelled, `change` never fires on the detached node so
+ * the value is silently dropped, and the replacement is seeded from the stale
+ * one. `force` is for a language change, which must relabel everything.
  */
-function buildLimitRows(): void {
-  limitRows.replaceChildren();
-
+function buildLimitRows(force = false): void {
   const current = drone;
   const names = current ? current.limits.known : [];
   limitsUnavailable.hidden = names.length > 0;
+
+  if (!force && sameLimitSet(renderedLimits, names) && limitControls.size === names.length) {
+    for (const name of names) {
+      const control = limitControls.get(name);
+      const range = current?.limits.range(name);
+      if (!control || !range) continue;
+
+      control.input.min = String(range.min);
+      control.input.max = String(range.max);
+
+      // Never overwrite a value the pilot is holding.
+      if (document.activeElement !== control.input) {
+        control.input.value = String(range.current);
+        control.show();
+      }
+    }
+    return;
+  }
+
+  limitRows.replaceChildren();
+  limitControls.clear();
+  renderedLimits = names;
 
   for (const name of names) {
     const range = current?.limits.range(name);
@@ -232,6 +263,7 @@ function buildLimitRows(): void {
       });
     });
 
+    limitControls.set(name, { input, show });
     row.append(label, input, readout);
     limitRows.append(row);
   }
@@ -323,7 +355,8 @@ function render(): void {
   applyStaticLabels();
   buildLanguageChoices();
   buildLightChoices();
-  buildLimitRows();
+  // A language change must relabel every row, so the rebuild is forced.
+  buildLimitRows(true);
   renderStatus();
   renderUpdate();
 }
