@@ -45,10 +45,14 @@ jobs:
           # first shell they cached.
           sed "s/__BUILD_ID__/${BUILD_ID}/" sw.js > site/sw.js
           grep -q "perok-${BUILD_ID}" site/sw.js
-          # dist/ is produced here and never committed; test files and the
-          # transport double have no business being online.
+          # dist/ is produced here and never committed; test files, the
+          # transport double and the fake drone have no business being online.
+          # The fake drone imports the double, so publishing one without the
+          # other would ship a module that cannot load.
           rsync -a --exclude '*.test.js' --exclude '*.test.js.map' \
-                   --exclude 'testing/' dist/ site/dist/
+                   --exclude 'testing/' \
+                   --exclude 'ui/fake-drone.js' --exclude 'ui/fake-drone.js.map' \
+                   dist/ site/dist/
 
       - uses: actions/upload-pages-artifact@v3
         with:
