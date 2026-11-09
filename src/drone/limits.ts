@@ -1,10 +1,8 @@
-import type { SettingRange } from '../protocol/notifications.js';
+import type { LimitName, SettingRange } from '../protocol/notifications.js';
 
-export type LimitName =
-  | 'maxAltitude'
-  | 'maxTilt'
-  | 'maxVerticalSpeed'
-  | 'maxRotationSpeed';
+// The vocabulary belongs to the protocol layer, which decides which settings
+// the drone reports; re-exported so callers of the model need one import.
+export type { LimitName };
 
 /**
  * What the drone says its own flight limits may be.

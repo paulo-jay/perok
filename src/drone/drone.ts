@@ -1,11 +1,30 @@
 import { CommandLoop } from './loop.js';
-import { CHAR, SERVICE } from '../protocol/uuids.js';
-import { emergency, flatTrim, land, takeOff } from '../protocol/frames.js';
+import { FlightLimits, type LimitName } from './limits.js';
+import { CHAR, NOTIFY_CHARS, SERVICE } from '../protocol/uuids.js';
+import {
+  emergency,
+  land,
+  lightControl,
+  maxAltitude,
+  maxRotationSpeed,
+  maxTilt,
+  maxVerticalSpeed,
+  takeOff,
+  // Aliased where a method of the same name exists, so it is never unclear
+  // which one a call refers to.
+  flatTrim as flatTrimFrame,
+  flip as flipFrame,
+  takePicture as takePictureFrame,
+  type FlipDirection,
+  type LightMode,
+} from '../protocol/frames.js';
 import {
   decodeBattery,
   decodeFlightState,
   isFlying,
+  routeNotification,
   type FlightState,
+  type PictureOutcome,
 } from '../protocol/notifications.js';
 import type { Axes } from '../axes.js';
 import type { Transport } from '../transport/ble.js';
@@ -14,15 +33,28 @@ export interface DroneState {
   connection: 'disconnected' | 'connected';
   flight: FlightState;
   battery: number | null;
+  picture: PictureOutcome | null;
+  light: { id: number; intensity: number } | null;
 }
+
+/** Which builder sends which limit. */
+const LIMIT_FRAMES: Record<LimitName, (seq: number, value: number) => Uint8Array> = {
+  maxAltitude,
+  maxTilt,
+  maxVerticalSpeed,
+  maxRotationSpeed,
+};
 
 export class Drone {
   private readonly loop: CommandLoop;
   private readonly listeners: ((state: DroneState) => void)[] = [];
+  private readonly flightLimits = new FlightLimits();
   private state: DroneState = {
     connection: 'connected',
     flight: 'landed',
     battery: null,
+    picture: null,
+    light: null,
   };
 
   constructor(private readonly transport: Transport) {
@@ -43,13 +75,51 @@ export class Drone {
     return this.loop.running || isFlying(this.state.flight);
   }
 
+  get limits(): FlightLimits {
+    return this.flightLimits;
+  }
+
   async init(): Promise<void> {
+    // Flight state and battery keep their own handlers: they are the two
+    // notifications proven in flight, and they are left exactly as they were.
     await this.transport.subscribe(SERVICE.NOTIFY, CHAR.FLIGHT_STATE, (data) => {
       this.update({ flight: decodeFlightState(data) });
     });
     await this.transport.subscribe(SERVICE.NOTIFY, CHAR.BATTERY, (data) => {
       this.update({ battery: decodeBattery(data) });
     });
+
+    // Everything added since is told apart by its frame header, so it does not
+    // matter which characteristic carries it — and that mapping is not
+    // documented anywhere we could rely on.
+    for (const [service, characteristic] of NOTIFY_CHARS) {
+      await this.transport.subscribe(service, characteristic, (data) => {
+        this.handleNotification(data);
+      });
+    }
+  }
+
+  private handleNotification(data: DataView): void {
+    const notification = routeNotification(data);
+    if (!notification) return;
+
+    switch (notification.kind) {
+      case 'limit':
+        this.flightLimits.report(notification.name, notification.range);
+        this.update({});
+        return;
+      case 'picture':
+        this.update({ picture: notification.outcome });
+        return;
+      case 'light':
+        this.update({
+          light: {
+            id: notification.state.id,
+            intensity: notification.state.intensity,
+          },
+        });
+        return;
+    }
   }
 
   onState(listener: (state: DroneState) => void): void {
@@ -63,7 +133,11 @@ export class Drone {
     if (this.airborne) return;
 
     const counters = this.transport.counters;
-    await this.transport.write(SERVICE.CMD, CHAR.CMD, flatTrim(counters.next(CHAR.CMD)));
+    await this.transport.write(
+      SERVICE.CMD,
+      CHAR.CMD,
+      flatTrimFrame(counters.next(CHAR.CMD)),
+    );
     await this.transport.write(SERVICE.CMD, CHAR.CMD, takeOff(counters.next(CHAR.CMD)));
     this.loop.start();
   }
@@ -93,6 +167,40 @@ export class Drone {
     );
   }
 
+  /** Recalibrates the inertial horizon, which only makes sense on the ground. */
+  async flatTrim(): Promise<void> {
+    if (this.airborne) return;
+    await this.write(CHAR.CMD, flatTrimFrame);
+  }
+
+  /**
+   * A flip needs a *stable* drone, not merely a commanded one — so this uses
+   * the reported state, unlike `land`, which must answer during take-off.
+   */
+  async flip(direction: FlipDirection = 'right'): Promise<void> {
+    if (this.state.flight !== 'hovering') return;
+    await this.write(CHAR.CMD, (seq) => flipFrame(seq, direction));
+  }
+
+  /** Clamped to what the drone says it accepts; silent until it has said. */
+  async setLimit(name: LimitName, value: number): Promise<void> {
+    const safe = this.flightLimits.sanitize(name, value);
+    if (safe === null) return;
+    await this.write(CHAR.CMD, (seq) => LIMIT_FRAMES[name](seq, safe));
+  }
+
+  /** The image stays in the drone's flash; this app cannot retrieve it. */
+  async takePicture(): Promise<void> {
+    await this.write(CHAR.CMD, takePictureFrame);
+  }
+
+  /** Only reachable once the drone has announced a light of its own. */
+  async setLight(mode: LightMode, intensity: number): Promise<void> {
+    const light = this.state.light;
+    if (!light) return;
+    await this.write(CHAR.CMD, (seq) => lightControl(seq, light.id, mode, intensity));
+  }
+
   setAxes(axes: Axes): void {
     this.loop.setAxes(axes);
   }
@@ -100,6 +208,18 @@ export class Drone {
   handleDisconnect(): void {
     this.loop.stop();
     this.update({ connection: 'disconnected' });
+  }
+
+  /** One place where a sequence number is drawn and a frame goes out. */
+  private async write(
+    characteristic: string,
+    build: (seq: number) => Uint8Array,
+  ): Promise<void> {
+    await this.transport.write(
+      SERVICE.CMD,
+      characteristic,
+      build(this.transport.counters.next(characteristic)),
+    );
   }
 
   private update(patch: Partial<DroneState>): void {

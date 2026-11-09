@@ -10,7 +10,12 @@ export type Written = { service: string; characteristic: string; frame: number[]
 export class FakeTransport implements Transport {
   readonly counters = new SequenceCounters();
   readonly written: Written[] = [];
-  readonly handlers = new Map<string, (data: DataView) => void>();
+  /**
+   * One characteristic can carry several listeners, as the real transport
+   * does by appending event listeners. Keeping a single handler per
+   * characteristic would silently drop the first subscriber.
+   */
+  readonly handlers = new Map<string, ((data: DataView) => void)[]>();
   failNextWrite = false;
   /** Persistent failures, to tell a one-off incident from a broken link. */
   failWrites = false;
@@ -30,7 +35,9 @@ export class FakeTransport implements Transport {
     characteristic: string,
     handler: (data: DataView) => void,
   ): Promise<void> {
-    this.handlers.set(characteristic, handler);
+    const existing = this.handlers.get(characteristic) ?? [];
+    existing.push(handler);
+    this.handlers.set(characteristic, existing);
   }
 
   disconnect(): void {
@@ -39,7 +46,8 @@ export class FakeTransport implements Transport {
 
   /** Simulates a notification from the drone. */
   emit(characteristic: string, ...bytes: number[]): void {
-    this.handlers.get(characteristic)?.(new DataView(new Uint8Array(bytes).buffer));
+    const data = new DataView(new Uint8Array(bytes).buffer);
+    for (const handler of this.handlers.get(characteristic) ?? []) handler(data);
   }
 
   on(characteristic: string): Written[] {

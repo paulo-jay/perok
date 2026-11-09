@@ -1,4 +1,4 @@
-import type { ParsedFrame } from './parse.js';
+import { parseFrame, type ParsedFrame } from './parse.js';
 
 export type FlightState =
   | 'landed'
@@ -89,4 +89,60 @@ export function decodeLightState(frame: ParsedFrame): LightState {
     state: frame.readEnum(1),
     intensity: frame.readU8(5),
   };
+}
+
+/** The settings the drone reports a range for. Owned here, used by the model. */
+export type LimitName =
+  | 'maxAltitude'
+  | 'maxTilt'
+  | 'maxVerticalSpeed'
+  | 'maxRotationSpeed';
+
+export type Notification =
+  | { kind: 'limit'; name: LimitName; range: SettingRange }
+  | { kind: 'picture'; outcome: PictureOutcome }
+  | { kind: 'light'; state: LightState };
+
+const PROJECT_MINIDRONE = 2;
+
+const CLASS_SPEED_SETTINGS_STATE = 5;
+const CLASS_PILOTING_SETTINGS_STATE = 9;
+const CLASS_MEDIA_RECORD_EVENT = 2;
+const CLASS_USB_ACCESSORY_STATE = 15;
+
+/** `(class, command)` to limit name, for the four settings-state reports. */
+const LIMIT_ROUTES: ReadonlyArray<readonly [number, number, LimitName]> = [
+  [CLASS_PILOTING_SETTINGS_STATE, 0, 'maxAltitude'],
+  [CLASS_PILOTING_SETTINGS_STATE, 1, 'maxTilt'],
+  [CLASS_SPEED_SETTINGS_STATE, 0, 'maxVerticalSpeed'],
+  [CLASS_SPEED_SETTINGS_STATE, 1, 'maxRotationSpeed'],
+];
+
+/**
+ * Identifies a notification by its header rather than by the characteristic it
+ * arrived on — that mapping is not documented anywhere we can rely on, so the
+ * header is the only trustworthy discriminator.
+ *
+ * Returns null for anything this app does not act on, which is most traffic:
+ * the drone reports a great deal more than we use.
+ */
+export function routeNotification(data: DataView): Notification | null {
+  const frame = parseFrame(data);
+  if (!frame || frame.project !== PROJECT_MINIDRONE) return null;
+
+  for (const [cls, cmd, name] of LIMIT_ROUTES) {
+    if (frame.cls === cls && frame.cmd === cmd) {
+      return { kind: 'limit', name, range: decodeSettingRange(frame) };
+    }
+  }
+
+  if (frame.cls === CLASS_MEDIA_RECORD_EVENT && frame.cmd === 0) {
+    return { kind: 'picture', outcome: decodePictureOutcome(frame) };
+  }
+
+  if (frame.cls === CLASS_USB_ACCESSORY_STATE && frame.cmd === 0) {
+    return { kind: 'light', state: decodeLightState(frame) };
+  }
+
+  return null;
 }

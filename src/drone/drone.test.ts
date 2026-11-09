@@ -91,6 +91,100 @@ test('handleDisconnect stops the loop and reports disconnected', async () => {
   assert.equal(t.on('fa0a').length, count);
 });
 
+test('flatTrim is refused while airborne', async () => {
+  // It recalibrates the inertial horizon.
+  const { t, d } = await connected();
+  await d.takeOff();
+  const before = t.on('fa0b').length;
+  await d.flatTrim();
+  assert.equal(t.on('fa0b').length, before, 'no flat trim in flight');
+  d.handleDisconnect();
+});
+
+test('flatTrim is sent while landed', async () => {
+  const { t, d } = await connected();
+  await d.flatTrim();
+  assert.deepEqual(t.on('fa0b').at(-1)!.frame.slice(2), [2, 0, 0, 0]);
+});
+
+test('flip is refused unless the drone is hovering', async () => {
+  // A flip on the ground is a crash, and during take-off the drone is not
+  // stable yet.
+  const { t, d } = await connected();
+  await d.flip();
+  assert.equal(t.on('fa0b').length, 0, 'not while landed');
+
+  await d.takeOff();
+  const duringTakeOff = t.on('fa0b').length;
+  t.emit('fb0e', 0, 0, 0, 0, 0, 0, 1); // takingOff
+  await d.flip();
+  assert.equal(t.on('fa0b').length, duringTakeOff, 'not while taking off');
+
+  t.emit('fb0e', 0, 0, 0, 0, 0, 0, 2); // hovering
+  await d.flip('back');
+  assert.deepEqual(t.on('fa0b').at(-1)!.frame.slice(2), [2, 4, 0, 0, 1, 0, 0, 0]);
+  d.handleDisconnect();
+});
+
+test('setLimit sends nothing until the drone reports a range', async () => {
+  const { t, d } = await connected();
+  await d.setLimit('maxAltitude', 5);
+  assert.equal(t.written.length, 0);
+});
+
+test('setLimit clamps to the reported range', async () => {
+  const { t, d } = await connected();
+  // MaxAltitudeChanged: current 3, min 1, max 10.
+  t.emit('fb1b', 4, 1, 2, 9, 0, 0, 0, 0, 0x40, 0x40, 0, 0, 0x80, 0x3f, 0, 0, 0x20, 0x41);
+  assert.deepEqual(d.limits.range('maxAltitude'), { current: 3, min: 1, max: 10 });
+
+  await d.setLimit('maxAltitude', 99);
+  // clamped to 10, whose little-endian float bytes are 00 00 20 41
+  assert.deepEqual(t.on('fa0b').at(-1)!.frame.slice(2), [2, 8, 0, 0, 0, 0, 0x20, 0x41]);
+});
+
+test('a picture failure reaches the state', async () => {
+  // memoryFull and lowBattery are ordinary outcomes on a ten-year-old drone.
+  const { t, d } = await connected();
+  let last: { taken: boolean; error: string } | null = null;
+  d.onState((s) => {
+    last = s.picture;
+  });
+  t.emit('fb1b', 4, 1, 2, 2, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0);
+  assert.deepEqual(last, { taken: false, error: 'memoryFull' });
+});
+
+test('a reported light becomes available, and nothing is assumed before', async () => {
+  // The whole P4 probe: the control exists only if the drone announces a light.
+  const { t, d } = await connected();
+  let seen: { id: number; intensity: number } | null = null;
+  d.onState((s) => {
+    seen = s.light;
+  });
+  assert.equal(seen, null);
+  t.emit('fb1b', 4, 1, 2, 15, 0, 0, 0, 1, 0, 0, 0, 80, 0);
+  assert.deepEqual(seen, { id: 0, intensity: 80 });
+});
+
+test('setLight sends nothing until a light has been reported', async () => {
+  const { t, d } = await connected();
+  await d.setLight('fixed', 100);
+  assert.equal(t.on('fa0b').length, 0);
+
+  t.emit('fb1b', 4, 1, 2, 15, 0, 0, 0, 1, 0, 0, 0, 80, 0);
+  await d.setLight('fixed', 100);
+  assert.deepEqual(
+    t.on('fa0b').at(-1)!.frame.slice(2),
+    [2, 16, 0, 0, 0, 0, 0, 0, 0, 100],
+  );
+});
+
+test('takePicture is sent and the flight state does not gate it', async () => {
+  const { t, d } = await connected();
+  await d.takePicture();
+  assert.deepEqual(t.on('fa0b').at(-1)!.frame.slice(2), [2, 6, 1, 0]);
+});
+
 test('notifications update battery and flight state', async () => {
   const { t, d } = await connected();
   let last = { battery: null as number | null, flight: '' };
