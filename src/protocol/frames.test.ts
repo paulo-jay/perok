@@ -1,7 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { uuid } from './uuids.js';
-import { currentDate, flatTrim, takeOff, land, emergency, flip, pcmd } from './frames.js';
+import {
+  currentDate,
+  flatTrim,
+  takeOff,
+  land,
+  emergency,
+  flip,
+  pcmd,
+  maxAltitude,
+  maxTilt,
+  maxVerticalSpeed,
+  maxRotationSpeed,
+  takePicture,
+  lightControl,
+} from './frames.js';
 
 const bytes = (f: Uint8Array) => Array.from(f);
 
@@ -44,4 +58,33 @@ test('pcmd encodes negative values as two s complement', () => {
 test('pcmd clamps out-of-range values', () => {
   const f = pcmd(3, { roll: 150, pitch: -150, yaw: 0, gaz: 0 }, true);
   assert.deepEqual(bytes(f).slice(7, 9), [100, 156]);
+});
+
+test('flight limit frames carry a little-endian float', () => {
+  assert.deepEqual(bytes(maxAltitude(7, 3)), [4, 7, 2, 8, 0, 0, 0, 0, 0x40, 0x40]);
+  assert.deepEqual(bytes(maxTilt(7, 20)), [4, 7, 2, 8, 1, 0, 0, 0, 0xa0, 0x41]);
+  assert.deepEqual(bytes(maxVerticalSpeed(7, 1)), [4, 7, 2, 1, 0, 0, 0, 0, 0x80, 0x3f]);
+  assert.deepEqual(bytes(maxRotationSpeed(7, 20)), [4, 7, 2, 1, 1, 0, 0, 0, 0xa0, 0x41]);
+});
+
+test('flip takes a named direction and defaults to the proven one', () => {
+  assert.deepEqual(bytes(flip(7)), [4, 7, 2, 4, 0, 0, 2, 0, 0, 0]);
+  assert.deepEqual(bytes(flip(7, 'front')), [4, 7, 2, 4, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(bytes(flip(7, 'back')), [4, 7, 2, 4, 0, 0, 1, 0, 0, 0]);
+  assert.deepEqual(bytes(flip(7, 'left')), [4, 7, 2, 4, 0, 0, 3, 0, 0, 0]);
+});
+
+test('takePicture uses PictureV2, which takes no argument', () => {
+  assert.deepEqual(bytes(takePicture(7)), [4, 7, 2, 6, 1, 0]);
+});
+
+test('lightControl carries id, a four-byte mode and an intensity', () => {
+  assert.deepEqual(
+    bytes(lightControl(7, 0, 'fixed', 100)),
+    [4, 7, 2, 16, 0, 0, 0, 0, 0, 0, 0, 100],
+  );
+  assert.deepEqual(
+    bytes(lightControl(7, 1, 'blinked', 50)),
+    [4, 7, 2, 16, 0, 0, 1, 1, 0, 0, 0, 50],
+  );
 });
