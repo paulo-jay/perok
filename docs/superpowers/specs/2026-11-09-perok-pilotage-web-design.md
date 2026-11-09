@@ -34,9 +34,9 @@ Un spike jetable, parti du projet communautaire
 (écrit pour le Rolling Spider), a établi des faits qui dé-risquent entièrement
 le projet :
 
-- le drone est vivant et émet en BLE sous le nom **`Maclan_XXXXXX`**
-  (MAC `[identifiant retire]`) — noter l'absence du « e » : Parrot tronque le nom
-  annoncé, et un filtre `Maclane_` ne matche rien ;
+- le drone est vivant et émet en BLE sous un nom de la forme
+  **`Maclan_` suivi de six chiffres** — noter l'absence du « e » : Parrot
+  tronque le nom annoncé, et un filtre `Maclane_` ne matche rien ;
 - une **page web a connecté le drone et l'a fait décoller** ;
 - l'Airborne Night expose donc **les mêmes services GATT que le Rolling
   Spider** : le protocole BLE est commun à la gamme des minidrones.

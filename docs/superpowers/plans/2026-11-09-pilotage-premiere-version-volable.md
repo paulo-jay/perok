@@ -768,7 +768,8 @@ Expected: démarrage en plein écran paysage, sans barre d'adresse.
 
 - [ ] **Step 2: Connexion**
 
-Appuyer sur Connect, choisir `Maclan_XXXXXX`.
+Appuyer sur Connect, choisir le drone dans le sélecteur — son nom commence par
+`Maclan_`.
 Expected: le bandeau passe à connecté, affiche un pourcentage de batterie plausible et l'état `landed`.
 
 - [ ] **Step 3: Décollage et vol stationnaire**
