@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0b0e14" />
+    <title>Perok</title>
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <header class="status" id="status">
+      <button id="connect" class="connect" type="button">Connecter</button>
+      <span class="chip" id="flight" aria-live="polite">hors ligne</span>
+      <span class="chip" id="battery" aria-live="polite">batterie —</span>
+    </header>
+
+    <main class="pad">
+      <section
+        class="stick"
+        id="stick-left"
+        aria-label="Manche gauche : altitude et rotation"
+      >
+        <span class="stick-hint">altitude<br />rotation</span>
+        <span class="knob" data-knob></span>
+      </section>
+
+      <section class="center">
+        <div class="actions">
+          <button id="takeoff" class="action" type="button" disabled>Décoller</button>
+          <button id="land" class="action land" type="button" disabled>Atterrir</button>
+        </div>
+
+        <div
+          class="cutoff"
+          id="cutoff"
+          role="button"
+          aria-label="Coupure moteur : glisser jusqu'au bout pour confirmer"
+        >
+          <span class="cutoff-label">Glisser pour couper les moteurs</span>
+          <span class="cutoff-handle" data-handle></span>
+        </div>
+      </section>
+
+      <section
+        class="stick"
+        id="stick-right"
+        aria-label="Manche droit : tangage et roulis"
+      >
+        <span class="stick-hint">direction</span>
+        <span class="knob" data-knob></span>
+      </section>
+    </main>
+
+    <script type="module" src="dist/ui/app.js"></script>
+  </body>
+</html>

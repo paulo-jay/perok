@@ -53,7 +53,13 @@ export class DualStickInput {
 
   private bind(el: HTMLElement, side: Side): void {
     const down = (event: PointerEvent): void => {
-      el.setPointerCapture(event.pointerId);
+      // La capture est un confort — garder le doigt suivi hors de la zone.
+      // Si elle échoue, le manche doit rester utilisable, pas devenir muet.
+      try {
+        el.setPointerCapture(event.pointerId);
+      } catch {
+        /* ignoré */
+      }
       this.pointers.set(event.pointerId, side);
       this.track(el, side, event);
     };
