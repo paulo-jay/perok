@@ -43,12 +43,62 @@ export class DualStickInput {
   ) {
     this.bind(leftEl, 'left');
     this.bind(rightEl, 'right');
+    this.bindFallbacks();
   }
 
   destroy(): void {
     for (const cleanup of this.cleanups) cleanup();
     this.cleanups.length = 0;
     this.pointers.clear();
+  }
+
+  /**
+   * Filets de sécurité. Les écouteurs posés sur le manche ne reçoivent le
+   * relâchement que grâce à la capture du pointeur ; si celle-ci a échoué, un
+   * doigt relevé hors de la zone ne produit jamais d'événement sur le manche,
+   * qui reste alors figé sur sa dernière valeur — et la boucle continue de
+   * commander ce mouvement. De même, une page masquée en plein vol (un appel
+   * entrant) laisserait les dernières consignes partir sans que le pilote voie
+   * quoi que ce soit.
+   */
+  private bindFallbacks(): void {
+    const release = (event: PointerEvent): void => {
+      const side = this.pointers.get(event.pointerId);
+      if (side === undefined) return;
+      this.pointers.delete(event.pointerId);
+      this.center(this.stick(side));
+      this.emit();
+    };
+
+    const releaseAll = (): void => {
+      this.pointers.clear();
+      this.center(this.left);
+      this.center(this.right);
+      this.emit();
+    };
+
+    const onVisibility = (): void => {
+      if (document.hidden) releaseAll();
+    };
+
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('lostpointercapture', release);
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    this.cleanups.push(() => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+      window.removeEventListener('lostpointercapture', release);
+      window.removeEventListener('blur', releaseAll);
+      document.removeEventListener('visibilitychange', onVisibility);
+    });
+  }
+
+  private center(stick: Point): void {
+    stick.x = 0;
+    stick.y = 0;
   }
 
   private bind(el: HTMLElement, side: Side): void {
@@ -71,9 +121,7 @@ export class DualStickInput {
 
     const release = (event: PointerEvent): void => {
       if (!this.pointers.delete(event.pointerId)) return;
-      const stick = this.stick(side);
-      stick.x = 0;
-      stick.y = 0;
+      this.center(this.stick(side));
       this.emit();
     };
 

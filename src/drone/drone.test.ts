@@ -41,6 +41,36 @@ test('emergency ecrit sur fa0c et arrete la boucle', async () => {
   assert.deepEqual(t.on('fa0c')[0].frame.slice(2), [2, 0, 4, 0]);
 });
 
+test('land fonctionne pendant le decollage, avant la premiere notification', async () => {
+  // L etat rapporte est initialise a 'landed' et ne change qu a la
+  // notification fb0e : s y fier seul rend « Atterrir » muet pendant tout le
+  // decollage, alors que c est la voie reflexe exigee par la conception.
+  const { t, d } = await connected();
+  await d.takeOff();
+  await d.land();
+  assert.deepEqual(t.on('fa0b').at(-1)!.frame.slice(2), [2, 0, 3, 0]);
+});
+
+test('un second decollage ne recalibre pas l horizon en vol', async () => {
+  // FlatTrim recale la centrale inertielle : l emettre en vol dereglerait
+  // le drone.
+  const { t, d } = await connected();
+  await d.takeOff();
+  const before = t.on('fa0b').length;
+  await d.takeOff();
+  assert.equal(t.on('fa0b').length, before, 'ni second FlatTrim ni second TakeOff');
+  d.handleDisconnect();
+});
+
+test('airborne reflete la boucle avant toute notification d etat', async () => {
+  const { d } = await connected();
+  assert.equal(d.airborne, false);
+  await d.takeOff();
+  assert.equal(d.airborne, true, 'en vol des que la boucle tourne');
+  await d.land();
+  assert.equal(d.airborne, false);
+});
+
 test('land alors que deja pose n emet rien et ne leve pas', async () => {
   // Review Focus 5
   const { t, d } = await connected();

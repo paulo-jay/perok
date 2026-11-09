@@ -53,12 +53,47 @@ test('start deux fois ne cree qu une seule boucle', async () => {
   assert.ok(t.on('fa0a').length <= 7, 'cadence doublee : intervalle fuite');
 });
 
-test('un echec d ecriture arrete la boucle sans rejet non traite', async () => {
-  // Review Focus 4
+test('un echec isole ne tue pas la boucle si le transport est vivant', async () => {
+  // Un lien vivant qui refuse une ecriture est un incident transitoire ;
+  // cesser d emettre laisserait le drone en vol avec des manches morts.
   const t = new FakeTransport();
   const loop = loopOn(t);
   t.failNextWrite = true;
   loop.start();
+  await sleep(60);
+  assert.equal(loop.running, true, 'la boucle doit survivre a un echec isole');
+  assert.ok(t.on('fa0a').length >= 2, 'elle doit continuer a emettre');
+  loop.stop();
+});
+
+test('la boucle s arrete si le transport se declare rompu', async () => {
+  // Review Focus 4
+  const t = new FakeTransport();
+  const loop = loopOn(t);
+  t.connected = false;
+  t.failWrites = true;
+  loop.start();
   await sleep(40);
   assert.equal(loop.running, false);
+});
+
+test('la boucle abandonne apres des echecs consecutifs', async () => {
+  const t = new FakeTransport();
+  const loop = loopOn(t);
+  t.failWrites = true;
+  loop.start();
+  await sleep(260);
+  assert.equal(loop.running, false, 'un lien muet doit finir par arreter la boucle');
+});
+
+test('la boucle previent quand elle abandonne', async () => {
+  const t = new FakeTransport();
+  let aborted = false;
+  const loop = new CommandLoop(t, new SequenceCounters(), 10, () => {
+    aborted = true;
+  });
+  t.failWrites = true;
+  loop.start();
+  await sleep(260);
+  assert.equal(aborted, true);
 });

@@ -4,6 +4,7 @@ import { emergency, flatTrim, land, takeOff } from '../protocol/frames.js';
 import {
   decodeBattery,
   decodeFlightState,
+  isFlying,
   type FlightState,
 } from '../protocol/notifications.js';
 import type { Axes } from '../axes.js';
@@ -27,7 +28,19 @@ export class Drone {
   constructor(private readonly transport: Transport) {
     // Les compteurs viennent du transport : la poignée de main a déjà
     // consommé des séquences sur `fa0b`.
-    this.loop = new CommandLoop(transport, transport.counters);
+    // Si la boucle renonce, le lien est perdu : on prend le même chemin qu'une
+    // déconnexion plutôt que de laisser l'interface mentir.
+    this.loop = new CommandLoop(transport, transport.counters, undefined, () => {
+      this.handleDisconnect();
+    });
+  }
+
+  /**
+   * Vrai dès que la boucle commande le drone, sans attendre la notification
+   * d'état — qui peut tarder ou ne jamais venir.
+   */
+  get airborne(): boolean {
+    return this.loop.running || isFlying(this.state.flight);
   }
 
   async init(): Promise<void> {
@@ -45,6 +58,10 @@ export class Drone {
 
   /** Le flat trim précède le décollage, comme dans l'implémentation prouvée. */
   async takeOff(): Promise<void> {
+    // FlatTrim recale l'horizon de la centrale inertielle : l'émettre en vol
+    // déréglerait le drone, et un second décollage n'a aucun sens.
+    if (this.airborne) return;
+
     const counters = this.transport.counters;
     await this.transport.write(SERVICE.CMD, CHAR.CMD, flatTrim(counters.next(CHAR.CMD)));
     await this.transport.write(SERVICE.CMD, CHAR.CMD, takeOff(counters.next(CHAR.CMD)));
@@ -52,7 +69,11 @@ export class Drone {
   }
 
   async land(): Promise<void> {
-    if (this.state.flight === 'landed') return;
+    // Se fier au seul état rapporté rendrait « Atterrir » muet pendant tout le
+    // décollage — l'état est initialisé à `landed` et ne bouge qu'à la première
+    // notification `fb0e`. Or c'est la voie réflexe : elle doit répondre dès
+    // qu'on a commandé le drone.
+    if (!this.airborne) return;
     await this.transport.write(
       SERVICE.CMD,
       CHAR.CMD,

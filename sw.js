@@ -9,7 +9,13 @@
  * sous-chemin sur GitHub Pages, où un chemin absolu pointerait à côté.
  */
 
-const CACHE = 'perok-v1';
+/*
+ * Le nom du cache porte l'identifiant du build, substitue par le workflow de
+ * deploiement. Un cache fixe rendait les mises en ligne invisibles : `sw.js`
+ * restait identique octet pour octet, le navigateur ne voyait aucune mise a
+ * jour, et le telephone servait indefiniment la premiere coquille installee.
+ */
+const CACHE = 'perok-__BUILD_ID__';
 
 const SHELL = [
   './',
@@ -52,13 +58,34 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/*
+ * Servir depuis le cache immediatement, puis le rafraichir en arriere-plan.
+ * Le cache repond donc toujours, reseau ou pas — c'est l'objectif « voler sans
+ * reseau » — tandis que la version suivante est deja prete au chargement
+ * d'apres. Un cache-first strict, lui, figeait l'application pour de bon.
+ */
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  const update = fetch(event.request)
+    .then(async (response) => {
+      if (response && response.ok) {
+        const cache = await caches.open(CACHE);
+        await cache.put(event.request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  event.waitUntil(update);
+
   event.respondWith(
-    caches.match(event.request).then((hit) => {
-      if (hit) return hit;
-      return fetch(event.request);
-    }),
+    caches.match(event.request).then(
+      (hit) =>
+        hit ||
+        update.then(
+          (response) => response || new Response('hors ligne', { status: 503 }),
+        ),
+    ),
   );
 });

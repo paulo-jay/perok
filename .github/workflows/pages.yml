@@ -34,10 +34,17 @@ jobs:
       - run: npm run build
 
       - name: Rassembler le site
+        env:
+          BUILD_ID: ${{ github.sha }}
         run: |
           mkdir -p site/dist
-          cp index.html manifest.webmanifest sw.js site/
+          cp index.html manifest.webmanifest site/
           cp -r css icons site/
+          # Le nom du cache doit changer a chaque build, sinon le navigateur ne
+          # voit aucune mise a jour du service worker et le telephone reste sur
+          # la premiere coquille installee.
+          sed "s/__BUILD_ID__/${BUILD_ID}/" sw.js > site/sw.js
+          grep -q "perok-${BUILD_ID}" site/sw.js
           # dist/ est produit ici, jamais commité ; les fichiers de test et la
           # doublure de transport n'ont rien à faire en ligne.
           rsync -a --exclude '*.test.js' --exclude '*.test.js.map' \

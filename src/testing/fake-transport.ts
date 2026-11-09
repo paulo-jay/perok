@@ -12,9 +12,12 @@ export class FakeTransport implements Transport {
   readonly written: Written[] = [];
   readonly handlers = new Map<string, (data: DataView) => void>();
   failNextWrite = false;
+  /** Echecs persistants, pour distinguer un incident isole d'un lien rompu. */
+  failWrites = false;
   connected = true;
 
   async write(service: string, characteristic: string, frame: Uint8Array): Promise<void> {
+    if (this.failWrites) throw new Error('write failed');
     if (this.failNextWrite) {
       this.failNextWrite = false;
       throw new Error('write failed');

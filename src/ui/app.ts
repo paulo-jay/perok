@@ -67,11 +67,21 @@ function showAxes(axes: Axes): void {
   placeKnob(rightStick, rightKnob, axes.roll, axes.pitch);
 }
 
+/**
+ * « Décoller » se verrouille dès que le drone est en l'air, pour qu'un second
+ * appui ne puisse pas recalibrer l'horizon en vol. « Atterrir » reste toujours
+ * actif : c'est la voie réflexe.
+ */
+function refreshControls(): void {
+  const current = drone;
+  takeOffBtn.disabled = current === null || current.airborne;
+  landBtn.disabled = current === null;
+}
+
 function setConnected(connected: boolean): void {
   document.body.classList.toggle('connected', connected);
   connectBtn.textContent = connected ? 'Déconnecter' : 'Connecter';
-  takeOffBtn.disabled = !connected;
-  landBtn.disabled = !connected;
+  refreshControls();
 
   if (!connected) {
     flightChip.textContent = 'hors ligne';
@@ -89,6 +99,7 @@ function render(state: DroneState): void {
   flightChip.textContent = FLIGHT_LABELS[state.flight];
   batteryChip.textContent =
     state.battery === null ? 'batterie —' : `batterie ${state.battery} %`;
+  refreshControls();
   document.body.classList.toggle(
     'low-battery',
     state.battery !== null && state.battery < LOW_BATTERY,
@@ -158,9 +169,24 @@ new SlideToConfirm(byId('cutoff'), () => {
 
 connectBtn.addEventListener('click', () => {
   if (drone) {
-    transport?.disconnect();
-    drone.handleDisconnect();
-    teardown();
+    const current = drone;
+    connectBtn.disabled = true;
+
+    // Ne jamais lâcher la liaison avec un drone en l'air : on lui commande
+    // d'abord de se poser. Sans cela, un pouce égaré sur ce bouton coupe le
+    // lien d'un drone en vol stationnaire.
+    const settle = current.airborne ? current.land() : Promise.resolve();
+
+    void settle
+      .catch((error: unknown) => {
+        console.error('Atterrissage avant déconnexion impossible', error);
+      })
+      .finally(() => {
+        transport?.disconnect();
+        current.handleDisconnect();
+        teardown();
+        connectBtn.disabled = false;
+      });
     return;
   }
 
@@ -177,15 +203,21 @@ connectBtn.addEventListener('click', () => {
 });
 
 takeOffBtn.addEventListener('click', () => {
-  void drone?.takeOff().catch((error: unknown) => {
-    console.error('Décollage impossible', error);
-  });
+  void drone
+    ?.takeOff()
+    .catch((error: unknown) => {
+      console.error('Décollage impossible', error);
+    })
+    .finally(refreshControls);
 });
 
 landBtn.addEventListener('click', () => {
-  void drone?.land().catch((error: unknown) => {
-    console.error('Atterrissage impossible', error);
-  });
+  void drone
+    ?.land()
+    .catch((error: unknown) => {
+      console.error('Atterrissage impossible', error);
+    })
+    .finally(refreshControls);
 });
 
 setConnected(false);
