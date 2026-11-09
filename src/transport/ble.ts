@@ -3,8 +3,8 @@ import { currentDate } from '../protocol/frames.js';
 import { SequenceCounters } from '../protocol/sequence.js';
 
 /**
- * Noms annoncés par les minidrones Parrot. `Maclan_` est celui du modèle
- * visé : Parrot tronque le nom, un filtre `Maclane_` ne trouve rien.
+ * Names advertised by Parrot minidrones. `Maclan_` is the targeted model:
+ * Parrot truncates the advertised name, so a `Maclane_` filter finds nothing.
  */
 const NAME_PREFIXES = [
   'Maclan_',
@@ -17,15 +17,15 @@ const NAME_PREFIXES = [
   'Swing_',
 ];
 
-/** Attente imposée entre les abonnements et la poignée de main. */
+/** Mandatory wait between the subscriptions and the handshake. */
 const HANDSHAKE_DELAY_MS = 100;
 
 export interface Transport {
   /**
-   * Compteurs de séquence de la connexion. Ils sont portés ici, et non par le
-   * modèle du drone, parce que la poignée de main écrit déjà sur `fa0b` :
-   * un compteur distinct ferait repartir `takeOff` à une séquence déjà
-   * consommée, que le drone peut écarter comme un doublon.
+   * Sequence counters for this connection. They live here rather than in the
+   * drone model because the handshake already writes on `fa0b`: a separate
+   * counter would restart `takeOff` at a sequence the drone has already
+   * consumed, and may discard as a duplicate.
    */
   readonly counters: SequenceCounters;
   readonly connected: boolean;
@@ -43,7 +43,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function requestDrone(): Promise<BluetoothDevice> {
   return navigator.bluetooth.requestDevice({
     filters: NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
-    // Sans cette liste, l'accès GATT est refusé après la connexion.
+    // Without this list, GATT access is denied after connecting.
     optionalServices: [SERVICE.CMD, SERVICE.NOTIFY, SERVICE.FD21, SERVICE.FD51].map(uuid),
   });
 }
@@ -52,7 +52,7 @@ export async function openTransport(
   device: BluetoothDevice,
   onDisconnect: () => void,
 ): Promise<Transport> {
-  if (!device.gatt) throw new Error('Appareil sans serveur GATT');
+  if (!device.gatt) throw new Error('Device without a GATT server');
 
   const server = await device.gatt.connect();
   const services = new Map<string, BluetoothRemoteGATTService>();
@@ -111,7 +111,7 @@ export async function openTransport(
     },
   };
 
-  // Ordre imposé par le spike : abonnements séquentiels, attente, poignée de main.
+  // Order imposed by the spike: sequential subscriptions, wait, handshake.
   for (const [service, characteristic] of NOTIFY_CHARS) {
     await transport.subscribe(service, characteristic, () => {});
   }

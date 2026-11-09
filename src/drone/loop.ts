@@ -4,20 +4,20 @@ import type { SequenceCounters } from '../protocol/sequence.js';
 import { NEUTRAL, type Axes } from '../axes.js';
 import type { Transport } from '../transport/ble.js';
 
-/** Le drone attend un flux de consignes, pas des impulsions. */
+/** The drone expects a stream of setpoints, not impulses. */
 const DEFAULT_INTERVAL_MS = 50;
 
 /**
- * Nombre d'échecs d'écriture consécutifs au-delà duquel on considère le lien
- * perdu, même si le transport se croit encore connecté. À 50 ms, cela laisse
- * une demi-seconde de tolérance aux incidents transitoires.
+ * Number of consecutive write failures after which the link is considered
+ * lost, even if the transport still believes it is connected. At 50 ms that
+ * allows half a second of tolerance for transient incidents.
  */
 const MAX_CONSECUTIVE_FAILURES = 10;
 
 /**
- * Émet l'état courant des quatre axes à intervalle fixe, y compris au neutre.
- * C'est cette émission continue qui rend le pilotage dosable, là où des
- * rafales ponctuelles donnent un vol saccadé.
+ * Sends the current state of the four axes at a fixed interval, neutral
+ * included. This continuous stream is what makes the drone controllable with
+ * fine gradations, where one-off bursts produce lurching flight.
  */
 export class CommandLoop {
   private axes: Axes = { ...NEUTRAL };
@@ -29,7 +29,7 @@ export class CommandLoop {
     private readonly transport: Transport,
     private readonly counters: SequenceCounters,
     private readonly intervalMs: number = DEFAULT_INTERVAL_MS,
-    /** Appelé quand la boucle renonce d'elle-même : le lien est perdu. */
+    /** Called when the loop gives up on its own: the link is lost. */
     private readonly onAbort?: () => void,
   ) {}
 
@@ -53,14 +53,14 @@ export class CommandLoop {
     clearInterval(this.timer);
     this.timer = null;
     this.failures = 0;
-    // Repartir au neutre : sinon un démarrage ultérieur commanderait
-    // immédiatement le dernier mouvement demandé.
+    // Back to neutral: otherwise a later start would immediately command the
+    // last requested movement.
     this.axes = { ...NEUTRAL };
   }
 
   private async tick(): Promise<void> {
-    // Une écriture plus lente que l'intervalle ne doit pas voir un second tour
-    // s'empiler par-dessus elle.
+    // A write slower than the interval must not get another round stacked on
+    // top of it.
     if (this.sending) return;
     this.sending = true;
 
@@ -74,10 +74,10 @@ export class CommandLoop {
     } catch {
       this.failures += 1;
 
-      // Un refus isolé sur un lien vivant est transitoire : s'arrêter là
-      // laisserait le drone en vol avec des manches morts et une interface qui
-      // affiche encore « stationnaire ». On ne renonce que si le transport se
-      // déclare rompu, ou si les échecs s'enchaînent.
+      // An isolated refusal on a live link is transient: stopping here would
+      // leave the drone airborne with dead sticks and a status bar still
+      // reading "hovering". Give up only if the transport reports a
+      // disconnect, or if failures pile up.
       if (!this.transport.connected || this.failures >= MAX_CONSECUTIVE_FAILURES) {
         this.stop();
         this.onAbort?.();

@@ -26,18 +26,18 @@ export class Drone {
   };
 
   constructor(private readonly transport: Transport) {
-    // Les compteurs viennent du transport : la poignée de main a déjà
-    // consommé des séquences sur `fa0b`.
-    // Si la boucle renonce, le lien est perdu : on prend le même chemin qu'une
-    // déconnexion plutôt que de laisser l'interface mentir.
+    // The counters come from the transport: the handshake has already consumed
+    // sequences on `fa0b`.
+    // If the loop gives up, the link is lost: take the same path as a
+    // disconnect rather than letting the interface lie.
     this.loop = new CommandLoop(transport, transport.counters, undefined, () => {
       this.handleDisconnect();
     });
   }
 
   /**
-   * Vrai dès que la boucle commande le drone, sans attendre la notification
-   * d'état — qui peut tarder ou ne jamais venir.
+   * True as soon as the loop is commanding the drone, without waiting for the
+   * state notification — which may lag or never arrive.
    */
   get airborne(): boolean {
     return this.loop.running || isFlying(this.state.flight);
@@ -56,10 +56,10 @@ export class Drone {
     this.listeners.push(listener);
   }
 
-  /** Le flat trim précède le décollage, comme dans l'implémentation prouvée. */
+  /** Flat trim precedes take-off, as in the proven implementation. */
   async takeOff(): Promise<void> {
-    // FlatTrim recale l'horizon de la centrale inertielle : l'émettre en vol
-    // déréglerait le drone, et un second décollage n'a aucun sens.
+    // Flat trim recalibrates the inertial unit's horizon: sending it in flight
+    // would throw the drone off, and a second take-off makes no sense.
     if (this.airborne) return;
 
     const counters = this.transport.counters;
@@ -69,11 +69,12 @@ export class Drone {
   }
 
   async land(): Promise<void> {
-    // Se fier au seul état rapporté rendrait « Atterrir » muet pendant tout le
-    // décollage — l'état est initialisé à `landed` et ne bouge qu'à la première
-    // notification `fb0e`. Or c'est la voie réflexe : elle doit répondre dès
-    // qu'on a commandé le drone.
+    // Relying on reported state alone would leave "Land" mute during the whole
+    // take-off — the state starts at `landed` and only moves on the first
+    // `fb0e` notification. Yet this is the reflex control: it must answer as
+    // soon as the drone has been commanded.
     if (!this.airborne) return;
+
     await this.transport.write(
       SERVICE.CMD,
       CHAR.CMD,
@@ -82,7 +83,7 @@ export class Drone {
     this.loop.stop();
   }
 
-  /** Coupe les moteurs sans condition : le drone tombe sur place. */
+  /** Cuts the motors unconditionally: the drone drops where it is. */
   async emergency(): Promise<void> {
     this.loop.stop();
     await this.transport.write(

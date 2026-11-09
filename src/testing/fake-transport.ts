@@ -4,15 +4,15 @@ import { SequenceCounters } from '../protocol/sequence.js';
 export type Written = { service: string; characteristic: string; frame: number[] };
 
 /**
- * Doublure de transport : rend la boucle de commande et le modèle du drone
- * testables sous Node, sans Bluetooth.
+ * Transport double: makes the command loop and the drone model testable under
+ * Node, with no Bluetooth.
  */
 export class FakeTransport implements Transport {
   readonly counters = new SequenceCounters();
   readonly written: Written[] = [];
   readonly handlers = new Map<string, (data: DataView) => void>();
   failNextWrite = false;
-  /** Echecs persistants, pour distinguer un incident isole d'un lien rompu. */
+  /** Persistent failures, to tell a one-off incident from a broken link. */
   failWrites = false;
   connected = true;
 
@@ -37,7 +37,7 @@ export class FakeTransport implements Transport {
     this.connected = false;
   }
 
-  /** Simule une notification du drone. */
+  /** Simulates a notification from the drone. */
   emit(characteristic: string, ...bytes: number[]): void {
     this.handlers.get(characteristic)?.(new DataView(new Uint8Array(bytes).buffer));
   }

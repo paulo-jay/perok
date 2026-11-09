@@ -2,15 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SequenceCounters } from './sequence.js';
 
-test('chaque caracteristique a son propre compteur, demarrant a 1', () => {
+test('each characteristic has its own counter, starting at 1', () => {
   const s = new SequenceCounters();
   assert.equal(s.next('fa0a'), 1);
   assert.equal(s.next('fa0a'), 2);
   assert.equal(s.next('fa0b'), 1);
 });
 
-test('le compteur boucle a 255 vers 0', () => {
-  // Review Focus 1 : survient au bout de 12,8 s de vol sur fa0a
+test('the counter wraps from 255 back to 0', () => {
+  // Happens after 12.8 s of flight on fa0a, so on every flight.
   const s = new SequenceCounters();
   for (let i = 0; i < 255; i++) s.next('fa0a');
   assert.equal(s.next('fa0a'), 0);

@@ -1,19 +1,19 @@
 /*
- * Service worker de Perok.
+ * Perok service worker.
  *
- * L'application doit se lancer et voler SANS réseau : c'est un objectif de
- * conception, pas une optimisation. La coquille est donc entièrement mise en
- * cache à l'installation, et servie depuis le cache en priorité.
+ * The app must start and fly WITHOUT a network: that is a design goal, not an
+ * optimisation. The whole shell is therefore cached on install and served from
+ * the cache first.
  *
- * Toutes les URL sont relatives : l'application est servie depuis un
- * sous-chemin sur GitHub Pages, où un chemin absolu pointerait à côté.
+ * Every URL is relative: the app is served from a sub-path on GitHub Pages,
+ * where an absolute path would miss.
  */
 
 /*
- * Le nom du cache porte l'identifiant du build, substitue par le workflow de
- * deploiement. Un cache fixe rendait les mises en ligne invisibles : `sw.js`
- * restait identique octet pour octet, le navigateur ne voyait aucune mise a
- * jour, et le telephone servait indefiniment la premiere coquille installee.
+ * The cache name carries the build id, substituted by the deploy workflow. A
+ * fixed cache name made deployments invisible: `sw.js` stayed byte-identical,
+ * the browser saw no update, and the phone served the first shell it had
+ * installed forever.
  */
 const CACHE = 'perok-__BUILD_ID__';
 
@@ -35,6 +35,7 @@ const SHELL = [
   'dist/protocol/frames.js',
   'dist/protocol/sequence.js',
   'dist/protocol/notifications.js',
+  'dist/i18n.js',
   'dist/axes.js',
 ];
 
@@ -59,10 +60,10 @@ self.addEventListener('activate', (event) => {
 });
 
 /*
- * Servir depuis le cache immediatement, puis le rafraichir en arriere-plan.
- * Le cache repond donc toujours, reseau ou pas — c'est l'objectif « voler sans
- * reseau » — tandis que la version suivante est deja prete au chargement
- * d'apres. Un cache-first strict, lui, figeait l'application pour de bon.
+ * Serve from the cache immediately, then refresh it in the background. The
+ * cache therefore always answers, network or not — that is the "fly without a
+ * network" goal — while the next version is already in place for the following
+ * load. A strict cache-first strategy, by contrast, froze the app for good.
  */
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
@@ -84,7 +85,7 @@ self.addEventListener('fetch', (event) => {
       (hit) =>
         hit ||
         update.then(
-          (response) => response || new Response('hors ligne', { status: 503 }),
+          (response) => response || new Response('offline', { status: 503 }),
         ),
     ),
   );

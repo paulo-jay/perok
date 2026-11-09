@@ -6,18 +6,18 @@ import { FakeTransport, sleep } from '../testing/fake-transport.js';
 
 const loopOn = (t: FakeTransport) => new CommandLoop(t, new SequenceCounters(), 10);
 
-test('la boucle emet en continu meme au neutre', async () => {
+test('the loop sends continuously, even at neutral', async () => {
   const t = new FakeTransport();
   const loop = loopOn(t);
   loop.start();
   await sleep(55);
   loop.stop();
   const sent = t.on('fa0a');
-  assert.ok(sent.length >= 3, `attendu >= 3 envois, recu ${sent.length}`);
-  assert.equal(sent[0].frame[6], 0, 'drapeau a 0 au neutre');
+  assert.ok(sent.length >= 3, `expected >= 3 sends, got ${sent.length}`);
+  assert.equal(sent[0].frame[6], 0, 'flag at 0 when neutral');
 });
 
-test('setAxes passe le drapeau a 1 et transmet les axes', async () => {
+test('setAxes raises the flag and passes the axes through', async () => {
   const t = new FakeTransport();
   const loop = loopOn(t);
   loop.setAxes({ roll: 10, pitch: 0, yaw: 0, gaz: -20 });
@@ -27,10 +27,10 @@ test('setAxes passe le drapeau a 1 et transmet les axes', async () => {
   const f = t.on('fa0a')[0].frame;
   assert.equal(f[6], 1);
   assert.equal(f[7], 10);
-  assert.equal(f[10], 236); // -20 en complement a deux
+  assert.equal(f[10], 236); // -20 as two's complement
 });
 
-test('stop arrete toute emission', async () => {
+test('stop ends all sending', async () => {
   const t = new FakeTransport();
   const loop = loopOn(t);
   loop.start();
@@ -42,32 +42,31 @@ test('stop arrete toute emission', async () => {
   assert.equal(loop.running, false);
 });
 
-test('start deux fois ne cree qu une seule boucle', async () => {
-  // Review Focus 5 : pas de fuite d intervalle
+test('starting twice creates only one loop', async () => {
+  // No leaked interval.
   const t = new FakeTransport();
   const loop = loopOn(t);
   loop.start();
   loop.start();
   await sleep(55);
   loop.stop();
-  assert.ok(t.on('fa0a').length <= 7, 'cadence doublee : intervalle fuite');
+  assert.ok(t.on('fa0a').length <= 7, 'rate doubled: interval leaked');
 });
 
-test('un echec isole ne tue pas la boucle si le transport est vivant', async () => {
-  // Un lien vivant qui refuse une ecriture est un incident transitoire ;
-  // cesser d emettre laisserait le drone en vol avec des manches morts.
+test('an isolated failure does not kill the loop while the link is alive', async () => {
+  // A live link refusing one write is a transient incident; stopping would
+  // leave the drone airborne with dead sticks.
   const t = new FakeTransport();
   const loop = loopOn(t);
   t.failNextWrite = true;
   loop.start();
   await sleep(60);
-  assert.equal(loop.running, true, 'la boucle doit survivre a un echec isole');
-  assert.ok(t.on('fa0a').length >= 2, 'elle doit continuer a emettre');
+  assert.equal(loop.running, true, 'the loop must survive an isolated failure');
+  assert.ok(t.on('fa0a').length >= 2, 'and must keep sending');
   loop.stop();
 });
 
-test('la boucle s arrete si le transport se declare rompu', async () => {
-  // Review Focus 4
+test('the loop stops when the transport reports a broken link', async () => {
   const t = new FakeTransport();
   const loop = loopOn(t);
   t.connected = false;
@@ -77,16 +76,16 @@ test('la boucle s arrete si le transport se declare rompu', async () => {
   assert.equal(loop.running, false);
 });
 
-test('la boucle abandonne apres des echecs consecutifs', async () => {
+test('the loop gives up after consecutive failures', async () => {
   const t = new FakeTransport();
   const loop = loopOn(t);
   t.failWrites = true;
   loop.start();
   await sleep(260);
-  assert.equal(loop.running, false, 'un lien muet doit finir par arreter la boucle');
+  assert.equal(loop.running, false, 'a mute link must eventually stop the loop');
 });
 
-test('la boucle previent quand elle abandonne', async () => {
+test('the loop reports when it gives up', async () => {
   const t = new FakeTransport();
   let aborted = false;
   const loop = new CommandLoop(t, new SequenceCounters(), 10, () => {

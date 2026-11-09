@@ -1,16 +1,15 @@
 /**
- * Web Bluetooth n'est pas décrit par la bibliothèque standard de TypeScript.
- * On déclare ici le strict sous-ensemble utilisé par le transport, plutôt que
- * d'ajouter une dépendance de types.
+ * Web Bluetooth is not described by TypeScript's standard library. Rather than
+ * add a types dependency, we declare here the strict subset the transport uses.
  */
 
 interface BluetoothRemoteGATTCharacteristic extends EventTarget {
   readonly uuid: string;
   readonly value?: DataView;
   /**
-   * L'API réelle accepte tout `BufferSource`, mais cet alias de la
-   * bibliothèque standard épingle son tampon à `ArrayBuffer` et rejette un
-   * `Uint8Array<ArrayBufferLike>`. On ne déclare donc que l'usage réel.
+   * The real API accepts any `BufferSource`, but that standard-library alias
+   * now pins its backing buffer to `ArrayBuffer` and rejects a
+   * `Uint8Array<ArrayBufferLike>`. So we declare only the actual usage.
    */
   writeValue(value: Uint8Array): Promise<void>;
   startNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;

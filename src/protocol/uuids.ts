@@ -1,31 +1,31 @@
-/** Les UUID Parrot suivent un motif unique dont seul le segment court varie. */
+/** Parrot UUIDs follow a single pattern; only the short segment varies. */
 export function uuid(short: string): string {
   return `9a66${short}-0800-9191-11e4-012d1540cb8e`;
 }
 
 export const SERVICE = {
-  /** Écritures sans réponse : les commandes. */
+  /** Write-without-response characteristics: the commands. */
   CMD: 'fa00',
-  /** Notifications d'état. */
+  /** State notifications. */
   NOTIFY: 'fb00',
   FD21: 'fd21',
   FD51: 'fd51',
 } as const;
 
 export const CHAR = {
-  /** Consignes de pilotage, émises en continu. */
+  /** Piloting setpoints, sent continuously. */
   PCMD: 'fa0a',
-  /** Commandes : flat trim, décollage, atterrissage, looping. */
+  /** Commands: flat trim, take off, land, flip. */
   CMD: 'fa0b',
-  /** Coupure moteur, sur sa propre caractéristique. */
+  /** Emergency motor cut-off, on its own characteristic. */
   EMERGENCY: 'fa0c',
   FLIGHT_STATE: 'fb0e',
   BATTERY: 'fb0f',
 } as const;
 
 /**
- * Caractéristiques à abonner à la connexion, dans cet ordre.
- * Le drone n'accepte la poignée de main qu'une fois ces abonnements posés.
+ * Characteristics to subscribe to on connection, in this order.
+ * The drone only accepts the handshake once these subscriptions are in place.
  */
 export const NOTIFY_CHARS: ReadonlyArray<readonly [string, string]> = [
   ['fb00', 'fb0f'],

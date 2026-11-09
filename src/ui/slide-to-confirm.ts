@@ -1,10 +1,10 @@
-/** Proportion de la piste à parcourir pour que la confirmation parte. */
+/** Fraction of the track that must be covered for the confirmation to fire. */
 const CONFIRM_RATIO = 0.95;
 
 /**
- * Piste à parcourir entièrement du doigt. C'est la seule voie vers la coupure
- * moteur : un appui simple ne doit jamais faire tomber le drone, alors qu'un
- * relâchement avant le bout annule et ramène la poignée.
+ * A track the finger must travel all the way across. This is the only route to
+ * the motor cut-off: a single tap must never drop the drone, while releasing
+ * before the end cancels and sends the handle back.
  */
 export class SlideToConfirm {
   private readonly handle: HTMLElement;
@@ -16,7 +16,7 @@ export class SlideToConfirm {
     private readonly onConfirm: () => void,
   ) {
     const handle = track.querySelector<HTMLElement>('[data-handle]');
-    if (!handle) throw new Error('Piste de confirmation sans poignée');
+    if (!handle) throw new Error('Confirmation track without a handle');
     this.handle = handle;
 
     handle.addEventListener('pointerdown', this.onDown);
@@ -30,7 +30,11 @@ export class SlideToConfirm {
   }
 
   private readonly onDown = (event: PointerEvent): void => {
-    this.handle.setPointerCapture(event.pointerId);
+    try {
+      this.handle.setPointerCapture(event.pointerId);
+    } catch {
+      /* ignored */
+    }
     this.activePointer = event.pointerId;
     this.originX = event.clientX;
   };

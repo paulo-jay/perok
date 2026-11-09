@@ -1,17 +1,16 @@
 import { applyDeadzone, stickToAxes, type Axes } from '../axes.js';
 
-/** Valeur de départ, à ajuster en vol réel. */
+/** Starting value, to be tuned in real flight. */
 const DEFAULT_DEADZONE = 10;
 
 type Point = { x: number; y: number };
 type Side = 'left' | 'right';
 
 /**
- * Correspondance fixée par la conception, sur la convention des jeux vidéo :
- * manche **gauche** pour se déplacer dans les quatre directions (tangage et
- * roulis), manche **droit** pour l'altitude et l'orientation (gaz et lacet).
- * Plus naturel pour qui a tenu une manette qu'une disposition de
- * radiocommande.
+ * Mapping fixed by the design, following the game-controller convention: the
+ * **left** stick moves the drone in all four directions (pitch and roll), the
+ * **right** stick handles altitude and heading (gaz and yaw). More natural for
+ * anyone who has held a gamepad than a radio-transmitter layout.
  */
 export function combineSticks(
   left: Point,
@@ -27,9 +26,9 @@ export function combineSticks(
 }
 
 /**
- * Deux manches virtuels suivis au doigt. `setPointerCapture` garde le doigt
- * suivi même lorsqu'il sort de la zone du manche, et `pointerId` permet de
- * piloter les deux manches simultanément.
+ * Two virtual sticks tracked by finger. `setPointerCapture` keeps the finger
+ * tracked even when it leaves the stick's area, and `pointerId` allows both
+ * sticks to be driven at once.
  */
 export class DualStickInput {
   private readonly left: Point = { x: 0, y: 0 };
@@ -54,14 +53,50 @@ export class DualStickInput {
     this.pointers.clear();
   }
 
+  private bind(el: HTMLElement, side: Side): void {
+    const down = (event: PointerEvent): void => {
+      // Capture is a convenience — keeping the finger tracked outside the
+      // area. If it fails, the stick must stay usable rather than go mute.
+      try {
+        el.setPointerCapture(event.pointerId);
+      } catch {
+        /* ignored */
+      }
+      this.pointers.set(event.pointerId, side);
+      this.track(el, side, event);
+    };
+
+    const move = (event: PointerEvent): void => {
+      if (this.pointers.get(event.pointerId) !== side) return;
+      this.track(el, side, event);
+    };
+
+    const release = (event: PointerEvent): void => {
+      if (!this.pointers.delete(event.pointerId)) return;
+      this.center(this.stick(side));
+      this.emit();
+    };
+
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+
+    this.cleanups.push(() => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', release);
+      el.removeEventListener('pointercancel', release);
+    });
+  }
+
   /**
-   * Filets de sécurité. Les écouteurs posés sur le manche ne reçoivent le
-   * relâchement que grâce à la capture du pointeur ; si celle-ci a échoué, un
-   * doigt relevé hors de la zone ne produit jamais d'événement sur le manche,
-   * qui reste alors figé sur sa dernière valeur — et la boucle continue de
-   * commander ce mouvement. De même, une page masquée en plein vol (un appel
-   * entrant) laisserait les dernières consignes partir sans que le pilote voie
-   * quoi que ce soit.
+   * Safety nets. The listeners on the stick itself only receive the release
+   * thanks to pointer capture; if that failed, a finger lifted outside the
+   * area never produces an event on the stick, which then stays frozen at its
+   * last value — and the loop keeps commanding that movement. Likewise, a page
+   * hidden mid-flight (an incoming call) would leave the last setpoints going
+   * out with the pilot unable to see anything.
    */
   private bindFallbacks(): void {
     const release = (event: PointerEvent): void => {
@@ -101,43 +136,6 @@ export class DualStickInput {
   private center(stick: Point): void {
     stick.x = 0;
     stick.y = 0;
-  }
-
-  private bind(el: HTMLElement, side: Side): void {
-    const down = (event: PointerEvent): void => {
-      // La capture est un confort — garder le doigt suivi hors de la zone.
-      // Si elle échoue, le manche doit rester utilisable, pas devenir muet.
-      try {
-        el.setPointerCapture(event.pointerId);
-      } catch {
-        /* ignoré */
-      }
-      this.pointers.set(event.pointerId, side);
-      this.track(el, side, event);
-    };
-
-    const move = (event: PointerEvent): void => {
-      if (this.pointers.get(event.pointerId) !== side) return;
-      this.track(el, side, event);
-    };
-
-    const release = (event: PointerEvent): void => {
-      if (!this.pointers.delete(event.pointerId)) return;
-      this.center(this.stick(side));
-      this.emit();
-    };
-
-    el.addEventListener('pointerdown', down);
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', release);
-
-    this.cleanups.push(() => {
-      el.removeEventListener('pointerdown', down);
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', release);
-      el.removeEventListener('pointercancel', release);
-    });
   }
 
   private track(el: HTMLElement, side: Side, event: PointerEvent): void {

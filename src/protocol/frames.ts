@@ -1,15 +1,17 @@
 import { clamp, type Axes } from '../axes.js';
 
-/** Envoi sans acquittement. */
+/** Send without acknowledgement. */
 const NO_ACK = 2;
-/** Envoi avec acquittement. */
+/** Send with acknowledgement. */
 const ACK = 4;
 
 const PROJECT_COMMON = 0;
 const PROJECT_MINIDRONE = 2;
 
 const CLASS_PILOTING = 0;
+/** `common.Common` — same id as Animations, but in another project. */
 const CLASS_COMMON = 4;
+/** `minidrone.Animations` — same id as Common, but in another project. */
 const CLASS_ANIMATIONS = 4;
 
 const CMD_FLAT_TRIM = 0;
@@ -21,13 +23,13 @@ const CMD_FLIP = 0;
 const CMD_CURRENT_DATE = 1;
 
 /**
- * Date envoyée lors de la poignée de main. Valeur reprise telle quelle du
- * spike qui a réellement fait voler ce drone : ne pas la remplacer par la
- * date du jour sans l'avoir testée en vol.
+ * Date sent during the handshake. Taken verbatim from the spike that genuinely
+ * flew this drone: do not replace it with today's date without testing in
+ * flight.
  */
 const HANDSHAKE_DATE = '2014-10-28';
 
-/** En-tête commun : type, séquence, projet, classe, commande, puis un octet nul. */
+/** Common header: type, sequence, project, class, command, then a zero byte. */
 export function encodeFrame(
   dataType: number,
   seq: number,
@@ -63,7 +65,7 @@ export function emergency(seq: number): Uint8Array {
   return encodeFrame(NO_ACK, seq, PROJECT_MINIDRONE, CLASS_PILOTING, CMD_EMERGENCY);
 }
 
-/** La direction est un entier sur quatre octets ; 2 est celle du spike. */
+/** Direction is a four-byte integer; 2 is the value used by the spike. */
 export function flip(seq: number, direction = 2): Uint8Array {
   return encodeFrame(ACK, seq, PROJECT_MINIDRONE, CLASS_ANIMATIONS, CMD_FLIP, [
     direction,
@@ -74,10 +76,11 @@ export function flip(seq: number, direction = 2): Uint8Array {
 }
 
 /**
- * Consigne de pilotage : onze octets utiles puis huit octets nuls, soit 19.
- * Les axes sont écrits par une vue signée sur le même tampon, ce qui produit
- * le complément à deux sans calcul manuel — une erreur de signe ici envoie
- * le drone à l'opposé de la commande.
+ * Piloting setpoint: eleven meaningful bytes then eight zero bytes, 19 in all.
+ *
+ * The axes are written through a signed view over the same buffer, which
+ * produces two's complement with no hand arithmetic — a sign error here sends
+ * the drone the opposite way to the command.
  */
 export function pcmd(seq: number, axes: Axes, active: boolean): Uint8Array {
   const frame = new Uint8Array(19);

@@ -1,9 +1,9 @@
 /**
- * Chaque caractéristique d'écriture porte son propre compteur de séquence,
- * incrémenté à chaque envoi et borné à un octet.
+ * Every write characteristic carries its own sequence counter, incremented on
+ * each send and one byte wide.
  *
- * Le bouclage n'est pas un cas limite : à 50 ms, `fa0a` dépasse 255 envois
- * en 12,8 secondes, donc à chaque vol.
+ * The wrap is not an edge case: at 50 ms, `fa0a` passes 255 sends in 12.8
+ * seconds, so it happens on every single flight.
  */
 export class SequenceCounters {
   private readonly counters = new Map<string, number>();

@@ -3,34 +3,36 @@ import { Drone, type DroneState } from '../drone/drone.js';
 import { DualStickInput } from '../input/dualstick.js';
 import { SlideToConfirm } from './slide-to-confirm.js';
 import { NEUTRAL, type Axes } from '../axes.js';
+import { LANGS, LANG_NAMES, resolveLang, t, type Key, type Lang } from '../i18n.js';
 
 const LOW_BATTERY = 10;
+const LANG_STORAGE_KEY = 'perok.lang';
 
-const FLIGHT_LABELS: Record<DroneState['flight'], string> = {
-  landed: 'posé',
-  takingOff: 'décollage',
-  hovering: 'stationnaire',
-  unknown: 'indéterminé',
-  landing: 'atterrissage',
-  cutOff: 'moteurs coupés',
+const FLIGHT_KEYS: Record<DroneState['flight'], Key> = {
+  landed: 'flightLanded',
+  takingOff: 'flightTakingOff',
+  hovering: 'flightHovering',
+  unknown: 'flightUnknown',
+  landing: 'flightLanding',
+  cutOff: 'flightCutOff',
 };
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
-  if (!el) throw new Error(`Élément introuvable : ${id}`);
+  if (!el) throw new Error(`Element not found: ${id}`);
   return el as T;
 }
 
 function knobOf(stick: HTMLElement): HTMLElement {
   const knob = stick.querySelector<HTMLElement>('[data-knob]');
-  if (!knob) throw new Error('Manche sans témoin de position');
+  if (!knob) throw new Error('Stick without a position indicator');
   return knob;
 }
 
 /**
- * Ni Screen Wake Lock ni le verrouillage d'orientation ne sont décrits par la
- * bibliothèque standard. On les atteint par une conversion locale plutôt que
- * d'ajouter une déclaration globale susceptible d'entrer en conflit.
+ * Neither Screen Wake Lock nor orientation locking is described by the
+ * standard library. We reach them through a local cast rather than adding a
+ * global declaration that could clash.
  */
 type WakeLockSentinel = { release(): Promise<void> };
 
@@ -51,10 +53,132 @@ const leftStick = byId('stick-left');
 const rightStick = byId('stick-right');
 const leftKnob = knobOf(leftStick);
 const rightKnob = knobOf(rightStick);
+const cutoffTrack = byId('cutoff');
+const settingsPanel = byId('settings');
+const settingsOpenBtn = byId<HTMLButtonElement>('settings-open');
+const settingsCloseBtn = byId<HTMLButtonElement>('settings-close');
+const languageChoices = byId('language-choices');
 
 let transport: Transport | null = null;
 let drone: Drone | null = null;
 let sentinel: WakeLockSentinel | null = null;
+let lastState: DroneState | null = null;
+
+/* ---------- Language ---------- */
+
+function readStoredLang(): string | null {
+  // Storage can throw or come back empty in a private window; the app must
+  // still start.
+  try {
+    return localStorage.getItem(LANG_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeLang(next: Lang): void {
+  try {
+    localStorage.setItem(LANG_STORAGE_KEY, next);
+  } catch {
+    /* ignored */
+  }
+}
+
+let lang: Lang = resolveLang(readStoredLang(), navigator.languages ?? [navigator.language]);
+
+function buildLanguageChoices(): void {
+  languageChoices.replaceChildren();
+
+  for (const option of LANGS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'choice';
+    button.textContent = LANG_NAMES[option];
+    button.setAttribute('aria-pressed', String(option === lang));
+    button.addEventListener('click', () => {
+      setLang(option);
+    });
+    languageChoices.append(button);
+  }
+}
+
+function setLang(next: Lang): void {
+  lang = next;
+  storeLang(next);
+  render();
+}
+
+/* ---------- Rendering ---------- */
+
+/** Static labels carry their key in the markup; dynamic ones are set below. */
+function applyStaticLabels(): void {
+  document.documentElement.lang = lang;
+
+  for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {
+    const key = el.dataset.i18n as Key | undefined;
+    if (key) el.textContent = t(lang, key);
+  }
+
+  leftStick.setAttribute('aria-label', t(lang, 'stickLeftAria'));
+  rightStick.setAttribute('aria-label', t(lang, 'stickRightAria'));
+  cutoffTrack.setAttribute('aria-label', t(lang, 'cutoffAria'));
+  settingsCloseBtn.setAttribute('aria-label', t(lang, 'close'));
+}
+
+function renderStatus(): void {
+  const current = drone;
+  const live = current !== null;
+
+  connectBtn.textContent = t(lang, live ? 'disconnect' : 'connect');
+  document.body.classList.toggle('connected', live);
+
+  takeOffBtn.disabled = current === null || current.airborne;
+  landBtn.disabled = current === null;
+
+  // The settings panel overlays the flight controls, so it is locked while the
+  // drone is in the air; the label says why rather than leaving a dead button.
+  const airborne = current !== null && current.airborne;
+  settingsOpenBtn.disabled = airborne;
+  const settingsLabel = t(lang, airborne ? 'settingsLockedInFlight' : 'settingsAria');
+  settingsOpenBtn.setAttribute('aria-label', settingsLabel);
+  settingsOpenBtn.title = settingsLabel;
+
+  if (!live || !lastState || lastState.connection === 'disconnected') {
+    flightChip.textContent = t(lang, 'statusOffline');
+    batteryChip.textContent = t(lang, 'batteryUnknown');
+    document.body.classList.remove('low-battery');
+    return;
+  }
+
+  flightChip.textContent = t(lang, FLIGHT_KEYS[lastState.flight]);
+  batteryChip.textContent =
+    lastState.battery === null
+      ? t(lang, 'batteryUnknown')
+      : t(lang, 'battery', { level: lastState.battery });
+  document.body.classList.toggle(
+    'low-battery',
+    lastState.battery !== null && lastState.battery < LOW_BATTERY,
+  );
+}
+
+function render(): void {
+  applyStaticLabels();
+  buildLanguageChoices();
+  renderStatus();
+}
+
+function onState(state: DroneState): void {
+  lastState = state;
+
+  if (state.connection === 'disconnected') {
+    teardown();
+    return;
+  }
+
+  renderStatus();
+}
+
+/* ---------- Sticks ---------- */
 
 function placeKnob(stick: HTMLElement, knob: HTMLElement, x: number, y: number): void {
   const radius = Math.min(stick.clientWidth, stick.clientHeight) / 2;
@@ -63,55 +187,17 @@ function placeKnob(stick: HTMLElement, knob: HTMLElement, x: number, y: number):
 }
 
 function showAxes(axes: Axes): void {
-  // Même correspondance que `combineSticks` : gauche déplace, droite monte et
-  // oriente. Les deux doivent rester d'accord, sinon le témoin mentirait sur
-  // ce qui est réellement commandé.
+  // Same mapping as `combineSticks`: left moves, right climbs and turns. They
+  // must agree, otherwise the indicator would lie about what is being sent.
   placeKnob(leftStick, leftKnob, axes.roll, axes.pitch);
   placeKnob(rightStick, rightKnob, axes.yaw, axes.gaz);
 }
 
-/**
- * « Décoller » se verrouille dès que le drone est en l'air, pour qu'un second
- * appui ne puisse pas recalibrer l'horizon en vol. « Atterrir » reste toujours
- * actif : c'est la voie réflexe.
- */
-function refreshControls(): void {
-  const current = drone;
-  takeOffBtn.disabled = current === null || current.airborne;
-  landBtn.disabled = current === null;
-}
-
-function setConnected(connected: boolean): void {
-  document.body.classList.toggle('connected', connected);
-  connectBtn.textContent = connected ? 'Déconnecter' : 'Connecter';
-  refreshControls();
-
-  if (!connected) {
-    flightChip.textContent = 'hors ligne';
-    batteryChip.textContent = 'batterie —';
-    document.body.classList.remove('low-battery');
-  }
-}
-
-function render(state: DroneState): void {
-  if (state.connection === 'disconnected') {
-    teardown();
-    return;
-  }
-
-  flightChip.textContent = FLIGHT_LABELS[state.flight];
-  batteryChip.textContent =
-    state.battery === null ? 'batterie —' : `batterie ${state.battery} %`;
-  refreshControls();
-  document.body.classList.toggle(
-    'low-battery',
-    state.battery !== null && state.battery < LOW_BATTERY,
-  );
-}
+/* ---------- Connection ---------- */
 
 async function acquireWakeLock(): Promise<void> {
-  // Un écran qui s'éteint en vol fait perdre le drone. Un refus n'est pas
-  // bloquant : on vole quand même.
+  // A screen that sleeps in flight loses you the drone. A refusal is not
+  // fatal: we fly anyway.
   try {
     sentinel = (await wakeLockApi()?.request('screen')) ?? null;
   } catch {
@@ -120,21 +206,22 @@ async function acquireWakeLock(): Promise<void> {
 }
 
 async function lockLandscape(): Promise<void> {
-  // Hors mode installé, l'échec est normal et doit rester silencieux.
+  // Outside installed mode this fails normally, and must stay silent.
   try {
     await orientationApi()?.lock('landscape');
   } catch {
-    /* ignoré */
+    /* ignored */
   }
 }
 
 function teardown(): void {
   drone = null;
   transport = null;
+  lastState = null;
   void sentinel?.release().catch(() => undefined);
   sentinel = null;
   showAxes(NEUTRAL);
-  setConnected(false);
+  renderStatus();
 }
 
 async function connect(): Promise<void> {
@@ -147,26 +234,26 @@ async function connect(): Promise<void> {
 
   const connected = new Drone(transport);
   await connected.init();
-  connected.onState(render);
+  connected.onState(onState);
   drone = connected;
 
-  setConnected(true);
-  flightChip.textContent = FLIGHT_LABELS.landed;
-
+  renderStatus();
   await acquireWakeLock();
   await lockLandscape();
 }
 
-// Les manches et la coupure sont câblés dès le chargement : l'interface est
-// ainsi vérifiable sans drone, et les témoins suivent le doigt tout de suite.
+/* ---------- Wiring ---------- */
+
+// Sticks and the cut-off are wired on load: the interface is then verifiable
+// without a drone, and the indicators follow the finger right away.
 new DualStickInput(leftStick, rightStick, (axes) => {
   showAxes(axes);
   drone?.setAxes(axes);
 });
 
-new SlideToConfirm(byId('cutoff'), () => {
+new SlideToConfirm(cutoffTrack, () => {
   void drone?.emergency().catch((error: unknown) => {
-    console.error('Coupure moteur impossible', error);
+    console.error('Motor cut-off failed', error);
   });
 });
 
@@ -175,14 +262,13 @@ connectBtn.addEventListener('click', () => {
     const current = drone;
     connectBtn.disabled = true;
 
-    // Ne jamais lâcher la liaison avec un drone en l'air : on lui commande
-    // d'abord de se poser. Sans cela, un pouce égaré sur ce bouton coupe le
-    // lien d'un drone en vol stationnaire.
+    // Never drop the link on an airborne drone: command a landing first.
+    // Without this, a stray thumb on this button cuts the link mid-hover.
     const settle = current.airborne ? current.land() : Promise.resolve();
 
     void settle
       .catch((error: unknown) => {
-        console.error('Atterrissage avant déconnexion impossible', error);
+        console.error('Landing before disconnect failed', error);
       })
       .finally(() => {
         transport?.disconnect();
@@ -196,9 +282,9 @@ connectBtn.addEventListener('click', () => {
   connectBtn.disabled = true;
   void connect()
     .catch((error: unknown) => {
-      console.error('Connexion impossible', error);
+      console.error('Connection failed', error);
       teardown();
-      flightChip.textContent = 'connexion échouée';
+      flightChip.textContent = t(lang, 'connectionFailed');
     })
     .finally(() => {
       connectBtn.disabled = false;
@@ -209,19 +295,33 @@ takeOffBtn.addEventListener('click', () => {
   void drone
     ?.takeOff()
     .catch((error: unknown) => {
-      console.error('Décollage impossible', error);
+      console.error('Take-off failed', error);
     })
-    .finally(refreshControls);
+    .finally(renderStatus);
 });
 
 landBtn.addEventListener('click', () => {
   void drone
     ?.land()
     .catch((error: unknown) => {
-      console.error('Atterrissage impossible', error);
+      console.error('Landing failed', error);
     })
-    .finally(refreshControls);
+    .finally(renderStatus);
 });
 
-setConnected(false);
+settingsOpenBtn.addEventListener('click', () => {
+  if (drone?.airborne) return;
+  settingsPanel.hidden = false;
+});
+
+settingsCloseBtn.addEventListener('click', () => {
+  settingsPanel.hidden = true;
+});
+
+settingsPanel.addEventListener('click', (event) => {
+  // Tapping the backdrop closes; tapping the card does not.
+  if (event.target === settingsPanel) settingsPanel.hidden = true;
+});
+
+render();
 showAxes(NEUTRAL);

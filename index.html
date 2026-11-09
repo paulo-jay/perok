@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -15,55 +15,67 @@
   </head>
   <body>
     <header class="status" id="status">
-      <button id="connect" class="connect" type="button">Connecter</button>
-      <span class="chip" id="flight" aria-live="polite">hors ligne</span>
-      <span class="chip" id="battery" aria-live="polite">batterie —</span>
+      <button id="connect" class="connect" type="button">Connect</button>
+      <span class="chip" id="flight" aria-live="polite">offline</span>
+      <span class="chip" id="battery" aria-live="polite">battery —</span>
+      <button id="settings-open" class="icon-btn" type="button">⚙</button>
     </header>
 
     <main class="pad">
-      <section
-        class="stick"
-        id="stick-left"
-        aria-label="Manche gauche : déplacement dans les quatre directions"
-      >
-        <span class="stick-hint">avance<br />recule<br />gauche · droite</span>
+      <section class="stick" id="stick-left">
+        <span class="stick-hint" data-i18n="stickLeftHint">movement</span>
         <span class="knob" data-knob></span>
       </section>
 
       <section class="center">
         <div class="actions">
-          <button id="takeoff" class="action" type="button" disabled>Décoller</button>
-          <button id="land" class="action land" type="button" disabled>Atterrir</button>
+          <button id="takeoff" class="action" type="button" disabled data-i18n="takeOff">
+            Take off
+          </button>
+          <button id="land" class="action land" type="button" disabled data-i18n="land">
+            Land
+          </button>
         </div>
 
-        <div
-          class="cutoff"
-          id="cutoff"
-          role="button"
-          aria-label="Coupure moteur : glisser jusqu'au bout pour confirmer"
-        >
-          <span class="cutoff-label">Glisser pour couper les moteurs</span>
+        <div class="cutoff" id="cutoff" role="button">
+          <span class="cutoff-label" data-i18n="cutoffLabel">Slide to cut the motors</span>
           <span class="cutoff-handle" data-handle></span>
         </div>
       </section>
 
-      <section
-        class="stick"
-        id="stick-right"
-        aria-label="Manche droit : altitude et orientation"
-      >
-        <span class="stick-hint">monte<br />descend<br />pivote ⟲ ⟳</span>
+      <section class="stick" id="stick-right">
+        <span class="stick-hint" data-i18n="stickRightHint">altitude · heading</span>
         <span class="knob" data-knob></span>
       </section>
     </main>
 
+    <!-- Settings. One row today; built so the P2 flight limits slot in beside it. -->
+    <div class="panel" id="settings" hidden>
+      <div
+        class="panel-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
+        <div class="panel-head">
+          <h2 id="settings-title" data-i18n="settings">Settings</h2>
+          <button id="settings-close" class="icon-btn" type="button">✕</button>
+        </div>
+
+        <div class="panel-row">
+          <span class="panel-label" data-i18n="language">Language</span>
+          <div class="choices" id="language-choices"></div>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="dist/ui/app.js"></script>
     <script>
-      // Chemin relatif : la portée doit suivre le sous-chemin de GitHub Pages.
+      // Relative path: the scope must follow the GitHub Pages sub-path.
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('sw.js').catch((error) => {
-            console.error('Service worker non enregistre', error);
+            console.error('Service worker not registered', error);
           });
         });
       }
