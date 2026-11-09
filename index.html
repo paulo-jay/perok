@@ -18,6 +18,7 @@
       <button id="connect" class="connect" type="button">Connect</button>
       <span class="chip" id="flight" aria-live="polite">offline</span>
       <span class="chip" id="battery" aria-live="polite">battery —</span>
+      <span class="chip notice" id="notice" aria-live="polite" hidden></span>
       <button id="settings-open" class="icon-btn" type="button">⚙</button>
     </header>
 
@@ -34,6 +35,30 @@
           </button>
           <button id="land" class="action land" type="button" disabled data-i18n="land">
             Land
+          </button>
+        </div>
+
+        <div class="actions-grid">
+          <button
+            id="flattrim"
+            class="action compact"
+            type="button"
+            disabled
+            data-i18n="flatTrim"
+          >
+            Flat trim
+          </button>
+          <button id="flip" class="action compact" type="button" disabled data-i18n="flip">
+            Flip
+          </button>
+          <button
+            id="photo"
+            class="action compact"
+            type="button"
+            disabled
+            data-i18n="photo"
+          >
+            Photo
           </button>
         </div>
 
@@ -65,6 +90,25 @@
         <div class="panel-row">
           <span class="panel-label" data-i18n="language">Language</span>
           <div class="choices" id="language-choices"></div>
+        </div>
+
+        <!-- One row per limit the drone reports; nothing is hardcoded. -->
+        <div id="limit-rows"></div>
+
+        <div class="panel-row" id="limits-unavailable">
+          <span class="panel-label" data-i18n="limitsUnavailable">
+            Flight limits available once the drone is connected.
+          </span>
+        </div>
+
+        <!-- Appears only if the drone announces a light of its own. -->
+        <div class="panel-row panel-row-stack" id="light-row" hidden>
+          <span class="panel-label" data-i18n="lights">Lights</span>
+          <div class="choices" id="light-choices"></div>
+          <label class="slider">
+            <span data-i18n="intensity">Intensity</span>
+            <input type="range" id="light-intensity" min="0" max="100" value="100" />
+          </label>
         </div>
 
         <div class="panel-row" id="update-row" hidden>

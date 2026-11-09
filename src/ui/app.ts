@@ -5,6 +5,8 @@ import { SlideToConfirm } from './slide-to-confirm.js';
 import { watchForUpdates } from './updates.js';
 import { NEUTRAL, type Axes } from '../axes.js';
 import { LANGS, LANG_NAMES, resolveLang, t, type Key, type Lang } from '../i18n.js';
+import type { LimitName } from '../drone/limits.js';
+import type { LightMode } from '../protocol/frames.js';
 
 const LOW_BATTERY = 10;
 const LANG_STORAGE_KEY = 'perok.lang';
@@ -64,8 +66,47 @@ const updateLabel = byId('update-label');
 const updateApplyBtn = byId<HTMLButtonElement>('update-apply');
 const versionValue = byId('version-value');
 
+const flatTrimBtn = byId<HTMLButtonElement>('flattrim');
+const flipBtn = byId<HTMLButtonElement>('flip');
+const photoBtn = byId<HTMLButtonElement>('photo');
+const notice = byId('notice');
+const limitRows = byId('limit-rows');
+const limitsUnavailable = byId('limits-unavailable');
+const lightRow = byId('light-row');
+const lightChoices = byId('light-choices');
+const lightIntensity = byId<HTMLInputElement>('light-intensity');
+
 const updates = watchForUpdates();
 let pendingUpdate = false;
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+const LIMIT_UNITS: Record<LimitName, string> = {
+  maxAltitude: 'm',
+  maxTilt: '°',
+  maxVerticalSpeed: 'm/s',
+  maxRotationSpeed: '°/s',
+};
+
+const LIMIT_LABELS: Record<LimitName, Key> = {
+  maxAltitude: 'maxAltitude',
+  maxTilt: 'maxTilt',
+  maxVerticalSpeed: 'maxVerticalSpeed',
+  maxRotationSpeed: 'maxRotationSpeed',
+};
+
+const PICTURE_ERROR_LABELS: Record<string, Key> = {
+  busy: 'pictureErrorBusy',
+  notAvailable: 'pictureErrorNotAvailable',
+  memoryFull: 'pictureErrorMemoryFull',
+  lowBattery: 'pictureErrorLowBattery',
+};
+
+const LIGHT_CHOICES: ReadonlyArray<{ key: Key; mode: LightMode; intensity: number | null }> = [
+  { key: 'lightOff', mode: 'fixed', intensity: 0 },
+  { key: 'lightFixed', mode: 'fixed', intensity: null },
+  { key: 'lightBlinked', mode: 'blinked', intensity: null },
+  { key: 'lightOscillated', mode: 'oscillated', intensity: null },
+];
 
 let transport: Transport | null = null;
 let drone: Drone | null = null;
@@ -133,15 +174,104 @@ function applyStaticLabels(): void {
   settingsCloseBtn.setAttribute('aria-label', t(lang, 'close'));
 }
 
+/**
+ * A notice that clears itself. Used for the picture outcome, which is the one
+ * thing the drone answers that is neither a state nor an error to log.
+ */
+function showNotice(text: string): void {
+  notice.textContent = text;
+  notice.hidden = false;
+  if (noticeTimer !== null) clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    notice.hidden = true;
+  }, 4000);
+}
+
+/**
+ * One row per limit the drone has reported, bounded by the range it gave. The
+ * value is sent on release, not while dragging: a slider emitting on every
+ * pixel would flood a Bluetooth link that carries the flight commands.
+ */
+function buildLimitRows(): void {
+  limitRows.replaceChildren();
+
+  const current = drone;
+  const names = current ? current.limits.known : [];
+  limitsUnavailable.hidden = names.length > 0;
+
+  for (const name of names) {
+    const range = current?.limits.range(name);
+    if (!range) continue;
+
+    const row = document.createElement('div');
+    row.className = 'panel-row';
+
+    const label = document.createElement('span');
+    label.className = 'panel-label';
+    label.textContent = t(lang, LIMIT_LABELS[name]);
+
+    const readout = document.createElement('span');
+    readout.className = 'limit-value';
+
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(range.min);
+    input.max = String(range.max);
+    input.step = String((range.max - range.min) / 100 || 1);
+    input.value = String(range.current);
+
+    const show = (): void => {
+      readout.textContent = `${Number(input.value).toFixed(1)} ${LIMIT_UNITS[name]}`;
+    };
+    show();
+
+    input.addEventListener('input', show);
+    input.addEventListener('change', () => {
+      void drone?.setLimit(name, Number(input.value)).catch((error: unknown) => {
+        console.error('Setting the limit failed', error);
+      });
+    });
+
+    row.append(label, input, readout);
+    limitRows.append(row);
+  }
+}
+
+function buildLightChoices(): void {
+  lightChoices.replaceChildren();
+
+  for (const choice of LIGHT_CHOICES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'choice';
+    button.textContent = t(lang, choice.key);
+    button.addEventListener('click', () => {
+      const intensity = choice.intensity ?? Number(lightIntensity.value);
+      void drone?.setLight(choice.mode, intensity).catch((error: unknown) => {
+        console.error('Setting the lights failed', error);
+      });
+    });
+    lightChoices.append(button);
+  }
+}
+
 function renderStatus(): void {
   const current = drone;
   const live = current !== null;
+  const hovering = live && lastState?.flight === 'hovering';
 
   connectBtn.textContent = t(lang, live ? 'disconnect' : 'connect');
   document.body.classList.toggle('connected', live);
 
   takeOffBtn.disabled = current === null || current.airborne;
   landBtn.disabled = current === null;
+  // Flat trim realigns the inertial horizon: only ever on the ground.
+  flatTrimBtn.disabled = current === null || current.airborne;
+  // A flip needs a stable drone, so the reported state must say hovering.
+  flipBtn.disabled = !hovering;
+  photoBtn.disabled = current === null;
+
+  lightRow.hidden = lastState?.light == null;
 
   // The settings panel overlays the flight controls, so it is locked while the
   // drone is in the air; the label says why rather than leaving a dead button.
@@ -192,11 +322,14 @@ function showVersion(): void {
 function render(): void {
   applyStaticLabels();
   buildLanguageChoices();
+  buildLightChoices();
+  buildLimitRows();
   renderStatus();
   renderUpdate();
 }
 
 function onState(state: DroneState): void {
+  const previousPicture = lastState?.picture;
   lastState = state;
 
   if (state.connection === 'disconnected') {
@@ -204,6 +337,17 @@ function onState(state: DroneState): void {
     return;
   }
 
+  if (state.picture && state.picture !== previousPicture) {
+    showNotice(
+      state.picture.taken
+        ? t(lang, 'photoTaken')
+        : t(lang, PICTURE_ERROR_LABELS[state.picture.error] ?? 'pictureErrorUnknown'),
+    );
+  }
+
+  // A newly reported limit adds a row, so the panel is rebuilt, not just
+  // relabelled.
+  buildLimitRows();
   renderStatus();
 }
 
@@ -339,6 +483,27 @@ landBtn.addEventListener('click', () => {
       console.error('Landing failed', error);
     })
     .finally(renderStatus);
+});
+
+flatTrimBtn.addEventListener('click', () => {
+  void drone
+    ?.flatTrim()
+    .catch((error: unknown) => {
+      console.error('Flat trim failed', error);
+    })
+    .finally(renderStatus);
+});
+
+flipBtn.addEventListener('click', () => {
+  void drone?.flip().catch((error: unknown) => {
+    console.error('Flip failed', error);
+  });
+});
+
+photoBtn.addEventListener('click', () => {
+  void drone?.takePicture().catch((error: unknown) => {
+    console.error('Taking a picture failed', error);
+  });
 });
 
 settingsOpenBtn.addEventListener('click', () => {

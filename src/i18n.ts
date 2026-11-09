@@ -38,6 +38,26 @@ type Dict = {
   updateAvailable: string;
   applyUpdate: string;
   updateWaitsForLanding: string;
+  flatTrim: string;
+  flip: string;
+  photo: string;
+  photoTaken: string;
+  pictureErrorUnknown: string;
+  pictureErrorBusy: string;
+  pictureErrorNotAvailable: string;
+  pictureErrorMemoryFull: string;
+  pictureErrorLowBattery: string;
+  lights: string;
+  lightOff: string;
+  lightFixed: string;
+  lightBlinked: string;
+  lightOscillated: string;
+  intensity: string;
+  maxAltitude: string;
+  maxTilt: string;
+  maxVerticalSpeed: string;
+  maxRotationSpeed: string;
+  limitsUnavailable: string;
   flightLanded: string;
   flightTakingOff: string;
   flightHovering: string;
@@ -72,6 +92,26 @@ const FR: Dict = {
   updateAvailable: 'Mise à jour disponible',
   applyUpdate: 'Appliquer',
   updateWaitsForLanding: 'Mise à jour prête, appliquée dès la déconnexion.',
+  flatTrim: 'Calibrer',
+  flip: 'Looping',
+  photo: 'Photo',
+  photoTaken: 'photo prise',
+  pictureErrorUnknown: 'échec photo',
+  pictureErrorBusy: 'caméra occupée',
+  pictureErrorNotAvailable: 'caméra indisponible',
+  pictureErrorMemoryFull: 'mémoire pleine',
+  pictureErrorLowBattery: 'batterie trop faible',
+  lights: 'LED',
+  lightOff: 'Éteintes',
+  lightFixed: 'Fixes',
+  lightBlinked: 'Clignotantes',
+  lightOscillated: 'Oscillantes',
+  intensity: 'Intensité',
+  maxAltitude: 'Altitude max',
+  maxTilt: 'Inclinaison max',
+  maxVerticalSpeed: 'Vitesse verticale max',
+  maxRotationSpeed: 'Vitesse de rotation max',
+  limitsUnavailable: 'Limites de vol disponibles une fois le drone connecté.',
   flightLanded: 'posé',
   flightTakingOff: 'décollage',
   flightHovering: 'stationnaire',
@@ -104,6 +144,26 @@ const EN: Dict = {
   updateAvailable: 'Update available',
   applyUpdate: 'Apply',
   updateWaitsForLanding: 'Update ready, applied as soon as you disconnect.',
+  flatTrim: 'Flat trim',
+  flip: 'Flip',
+  photo: 'Photo',
+  photoTaken: 'picture taken',
+  pictureErrorUnknown: 'picture failed',
+  pictureErrorBusy: 'camera busy',
+  pictureErrorNotAvailable: 'camera unavailable',
+  pictureErrorMemoryFull: 'memory full',
+  pictureErrorLowBattery: 'battery too low',
+  lights: 'Lights',
+  lightOff: 'Off',
+  lightFixed: 'Fixed',
+  lightBlinked: 'Blinking',
+  lightOscillated: 'Oscillating',
+  intensity: 'Intensity',
+  maxAltitude: 'Max altitude',
+  maxTilt: 'Max tilt',
+  maxVerticalSpeed: 'Max vertical speed',
+  maxRotationSpeed: 'Max rotation speed',
+  limitsUnavailable: 'Flight limits available once the drone is connected.',
   flightLanded: 'landed',
   flightTakingOff: 'taking off',
   flightHovering: 'hovering',

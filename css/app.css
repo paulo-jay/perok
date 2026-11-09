@@ -258,6 +258,50 @@ body.connected .connect {
   opacity: 0.4;
 }
 
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.action.compact {
+  padding: 10px 2px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.notice {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.panel-row-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.slider input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.limit-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  min-width: 68px;
+  text-align: right;
+}
+
 /* "Land" is the reflex control: one tap, always visible. */
 .action.land {
   border-color: var(--ok);
