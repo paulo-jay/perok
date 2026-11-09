@@ -51,6 +51,22 @@ test('land sends land and stops the loop', async () => {
   assert.equal(t.on('fa0a').length, count);
 });
 
+test('a failed land still stops the setpoint stream', async () => {
+  // Stopping the loop after the write means one refused land leaves it
+  // streaming at twenty frames a second for ever, and `airborne` stays true —
+  // so take-off locks out and the controls look dead from then on.
+  const { t, d } = await connected();
+  await d.takeOff();
+  t.emit('fb0e', 4, 1, 2, 3, 1, 0, 2, 0, 0, 0); // hovering
+
+  t.failNextWrite = true;
+  await d.land().catch(() => undefined);
+
+  const before = t.on('fa0a').length;
+  await sleep(60);
+  assert.equal(t.on('fa0a').length, before, 'the loop must not keep streaming');
+});
+
 test('emergency writes on fa0c and stops the loop', async () => {
   const { t, d } = await connected();
   await d.takeOff();

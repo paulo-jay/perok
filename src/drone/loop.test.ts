@@ -17,15 +17,31 @@ test('the loop sends continuously, even at neutral', async () => {
   assert.equal(sent[0].frame[6], 0, 'flag at 0 when neutral');
 });
 
-test('setpoints are written without an acknowledgement round trip', async () => {
-  // `fa0a` is declared write-without-response. An acknowledgement per frame,
-  // twenty times a second, is what made the controls go unresponsive.
+test('setpoints are written with an acknowledgement, for the backpressure', async () => {
+  // Not an optimisation left on the table: an unacknowledged write resolves
+  // when it is queued, not when it is delivered, so the loop cannot tell a
+  // link that is keeping up from one that is drowning. It then enqueues twenty
+  // frames a second regardless, the queue grows inside the browser, and the
+  // acknowledged command writes — take off, land — end up stuck behind it.
+  // The acknowledgement IS the flow control.
   const t = new FakeTransport();
   const loop = loopOn(t);
   loop.start();
   await sleep(25);
   loop.stop();
-  assert.equal(t.on('fa0a')[0].withoutResponse, true);
+  assert.equal(t.on('fa0a')[0].withoutResponse, false);
+});
+
+test('a write slower than the interval makes the loop skip, not pile up', async () => {
+  // The skipped count is what tells a saturated link from a frozen interface.
+  const t = new FakeTransport();
+  t.writeDelayMs = 40;
+  const loop = loopOn(t);
+  loop.start();
+  await sleep(140);
+  loop.stop();
+  assert.ok(loop.skippedTicks > 0, 'slow writes must cause skips');
+  assert.ok(t.on('fa0a').length <= 5, 'and must not queue a write per tick');
 });
 
 test('setAxes raises the flag and passes the axes through', async () => {

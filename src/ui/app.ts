@@ -311,7 +311,8 @@ function renderStatus(): void {
   // link shows as a high latency; a slow interface would not.
   const stats = current?.stats;
   diagnosticsValue.textContent = stats
-    ? `${stats.notifications} ⇣ · ${stats.writes} ⇡ · ${stats.lastWriteMs}/${stats.maxWriteMs} ms`
+    ? `${stats.notifications} ⇣ · ${stats.writes} ⇡ · ${stats.lastWriteMs}/${stats.maxWriteMs} ms` +
+      ` · ${current?.skippedTicks ?? 0} skip`
     : '—';
 
   // The settings panel overlays the flight controls, so it is locked while the
@@ -455,13 +456,29 @@ function teardown(): void {
   if (pendingUpdate) updates.apply();
 }
 
-async function connect(): Promise<void> {
-  const device = await requestDrone();
+/**
+ * `?fake=1` connects to a drone that does not exist, for reproducing interface
+ * faults without hardware. The module is pulled in by a dynamic import, so it
+ * is absent from the normal bundle and from the offline shell, and the flag
+ * cannot engage by accident.
+ */
+const FAKE_DRONE = new URLSearchParams(location.search).get('fake') === '1';
 
-  transport = await openTransport(device, () => {
+async function openAnyTransport(): Promise<Transport> {
+  if (FAKE_DRONE) {
+    const { createFakeDrone } = await import('./fake-drone.js');
+    return createFakeDrone().transport;
+  }
+
+  const device = await requestDrone();
+  return openTransport(device, () => {
     drone?.handleDisconnect();
     teardown();
   });
+}
+
+async function connect(): Promise<void> {
+  transport = await openAnyTransport();
 
   const connected = new Drone(transport);
   await connected.init();

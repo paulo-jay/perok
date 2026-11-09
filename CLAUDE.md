@@ -93,6 +93,20 @@ is what makes an additional control scheme cost one input module and nothing els
 - **A failed write is not a lost link.** Stopping the command loop on a single rejection
   leaves the drone hovering with dead sticks. Give up only when the transport reports a
   disconnect, or after repeated consecutive failures.
+- **Never write setpoints without an acknowledgement.** `writeValueWithoutResponse` looks
+  like free latency, but it resolves when the frame is *queued*, not delivered. The loop
+  then cannot tell a link that is keeping up from one that is drowning, keeps enqueueing
+  twenty frames a second, and the queue grows inside the browser until the acknowledged
+  command writes are stuck behind it — the interface stops answering after a few
+  take-offs. The acknowledgement is the loop's only flow control; `CommandLoop.skippedTicks`
+  is how that degradation is made visible.
+- **Stop the loop in a `finally`, not after the write.** One refused landing used to leave
+  setpoints streaming for ever with `airborne` stuck true, which locked take-off out for
+  the rest of the session. The test for it times the whole suite out when it regresses,
+  because the leaked interval keeps Node alive.
+- **`?fake=1` connects to a drone that does not exist** (`src/ui/fake-drone.ts`, pulled in
+  by dynamic import so it never reaches the bundle or the offline shell). It is how an
+  interface fault gets reproduced at a keyboard instead of in the air.
 - **The service worker cache name carries the build id**, substituted from `github.sha` by
   the deploy workflow. A fixed cache name made deployments invisible: `sw.js` stayed
   byte-identical, the browser saw no update, and installed phones served the first shell

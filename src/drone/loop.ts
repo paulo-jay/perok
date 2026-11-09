@@ -24,6 +24,7 @@ export class CommandLoop {
   private timer: ReturnType<typeof setInterval> | null = null;
   private failures = 0;
   private sending = false;
+  private skipped = 0;
 
   constructor(
     private readonly transport: Transport,
@@ -35,6 +36,15 @@ export class CommandLoop {
 
   get running(): boolean {
     return this.timer !== null;
+  }
+
+  /**
+   * Ticks dropped because the previous write had not come back. A rising count
+   * means the link is the limit, which is the honest signal to show a pilot —
+   * and the difference between a saturated link and a frozen interface.
+   */
+  get skippedTicks(): number {
+    return this.skipped;
   }
 
   setAxes(axes: Axes): void {
@@ -60,8 +70,12 @@ export class CommandLoop {
 
   private async tick(): Promise<void> {
     // A write slower than the interval must not get another round stacked on
-    // top of it.
-    if (this.sending) return;
+    // top of it. This is the loop's entire flow control, and it only works
+    // because the write is acknowledged — see the note below.
+    if (this.sending) {
+      this.skipped += 1;
+      return;
+    }
     this.sending = true;
 
     const { roll, pitch, yaw, gaz } = this.axes;
@@ -69,12 +83,16 @@ export class CommandLoop {
     const frame = pcmd(this.counters.next(CHAR.PCMD), this.axes, active);
 
     try {
-      // Without response: `fa0a` is declared write-without-response, and at
-      // twenty frames a second an acknowledgement round trip per frame costs
-      // far more than a lost frame — the next setpoint is 50 ms away.
-      await this.transport.write(SERVICE.CMD, CHAR.PCMD, frame, {
-        withoutResponse: true,
-      });
+      // Acknowledged on purpose, although `fa0a` is declared
+      // write-without-response. An unacknowledged write resolves when it is
+      // queued, not when it is delivered: the loop then cannot tell a link
+      // that is keeping up from one that is drowning, enqueues twenty frames a
+      // second regardless, and the queue grows inside the browser until the
+      // acknowledged command writes are stuck behind it — which is what made
+      // the interface stop answering after a few take-offs. The
+      // acknowledgement is the flow control, and the skip above is how it
+      // degrades.
+      await this.transport.write(SERVICE.CMD, CHAR.PCMD, frame);
       this.failures = 0;
     } catch {
       this.failures += 1;

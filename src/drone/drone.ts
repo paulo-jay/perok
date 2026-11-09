@@ -84,6 +84,11 @@ export class Drone {
     return this.transport.stats;
   }
 
+  /** Setpoint ticks dropped because the link had not caught up. */
+  get skippedTicks(): number {
+    return this.loop.skippedTicks;
+  }
+
   init(): Promise<void> {
     // Every notification goes through one handler that identifies it by its
     // frame header. Reading the flight state from a fixed byte of whatever
@@ -160,12 +165,19 @@ export class Drone {
     // soon as the drone has been commanded.
     if (!this.airborne) return;
 
-    await this.transport.write(
-      SERVICE.CMD,
-      CHAR.CMD,
-      land(this.transport.counters.next(CHAR.CMD)),
-    );
-    this.loop.stop();
+    try {
+      await this.transport.write(
+        SERVICE.CMD,
+        CHAR.CMD,
+        land(this.transport.counters.next(CHAR.CMD)),
+      );
+    } finally {
+      // Whether or not the command got through. Stopping only on success left
+      // one refused land streaming setpoints for ever, with `airborne` stuck
+      // true — so take-off locked out and every control looked dead from then
+      // on.
+      this.loop.stop();
+    }
   }
 
   /** Cuts the motors unconditionally: the drone drops where it is. */

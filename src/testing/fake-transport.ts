@@ -26,6 +26,8 @@ export class FakeTransport implements Transport {
   failNextWrite = false;
   /** Persistent failures, to tell a one-off incident from a broken link. */
   failWrites = false;
+  /** Simulates a slow link, so backpressure can be tested. */
+  writeDelayMs = 0;
   connected = true;
 
   async write(
@@ -38,6 +40,9 @@ export class FakeTransport implements Transport {
     if (this.failNextWrite) {
       this.failNextWrite = false;
       throw new Error('write failed');
+    }
+    if (this.writeDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.writeDelayMs));
     }
     this.written.push({
       service,
