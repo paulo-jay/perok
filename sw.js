@@ -36,6 +36,9 @@ const SHELL = [
   'dist/protocol/frames.js',
   'dist/protocol/sequence.js',
   'dist/protocol/notifications.js',
+  'dist/protocol/args.js',
+  'dist/protocol/parse.js',
+  'dist/drone/limits.js',
   'dist/i18n.js',
   'dist/axes.js',
 ];
@@ -80,6 +83,11 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  // A page load may carry a query string the precache has never seen, and the
+  // cache matches URLs including their search. Without this, opening the app
+  // offline at anything but the exact cached URL answered 503.
+  const navigation = event.request.mode === 'navigate';
+
   const update = fetch(event.request)
     .then(async (response) => {
       if (response && response.ok) {
@@ -93,12 +101,21 @@ self.addEventListener('fetch', (event) => {
   event.waitUntil(update);
 
   event.respondWith(
-    caches.match(event.request).then(
-      (hit) =>
-        hit ||
-        update.then(
-          (response) => response || new Response('offline', { status: 503 }),
-        ),
-    ),
+    (async () => {
+      const hit = await caches.match(event.request, { ignoreSearch: navigation });
+      if (hit) return hit;
+
+      const fresh = await update;
+      if (fresh) return fresh;
+
+      // Offline and never cached under this exact URL: any navigation is the
+      // same shell, so serve it rather than failing the launch.
+      if (navigation) {
+        const shell = await caches.match('index.html');
+        if (shell) return shell;
+      }
+
+      return new Response('offline', { status: 503 });
+    })(),
   );
 });
