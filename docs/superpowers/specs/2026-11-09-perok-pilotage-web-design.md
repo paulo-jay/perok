@@ -50,8 +50,11 @@ Le verrou technique principal est levé avant la première ligne du projet.
 
 2. **Trois schémas de commande au choix de l'utilisateur** — décision de Paul,
    qui a préféré les implémenter tous les trois plutôt que d'en élire un :
-   - **deux joysticks virtuels** — gauche : altitude et lacet ; droite :
-     tangage et roulis (disposition d'une radiocommande classique) ;
+   - **deux joysticks virtuels** — gauche : déplacement dans les quatre
+     directions (tangage et roulis) ; droite : altitude et orientation (gaz et
+     lacet). C'est la convention des jeux vidéo — le manche gauche déplace, le
+     manche droit regarde — que Paul a préférée après son premier vol à la
+     disposition d'une radiocommande classique, qui était l'inverse ;
    - **un joystick + boutons** — manche pour la direction, boutons maintenus
      pour monter, descendre et pivoter ;
    - **joystick + inclinaison** — l'inclinaison physique de l'appareil dirige,

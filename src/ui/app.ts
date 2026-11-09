@@ -63,8 +63,11 @@ function placeKnob(stick: HTMLElement, knob: HTMLElement, x: number, y: number):
 }
 
 function showAxes(axes: Axes): void {
-  placeKnob(leftStick, leftKnob, axes.yaw, axes.gaz);
-  placeKnob(rightStick, rightKnob, axes.roll, axes.pitch);
+  // Même correspondance que `combineSticks` : gauche déplace, droite monte et
+  // oriente. Les deux doivent rester d'accord, sinon le témoin mentirait sur
+  // ce qui est réellement commandé.
+  placeKnob(leftStick, leftKnob, axes.roll, axes.pitch);
+  placeKnob(rightStick, rightKnob, axes.yaw, axes.gaz);
 }
 
 /**

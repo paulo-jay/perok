@@ -7,9 +7,11 @@ type Point = { x: number; y: number };
 type Side = 'left' | 'right';
 
 /**
- * Correspondance fixée par la conception : manche gauche pour l'altitude et
- * la rotation, manche droit pour le tangage et le roulis — la disposition
- * d'une radiocommande classique.
+ * Correspondance fixée par la conception, sur la convention des jeux vidéo :
+ * manche **gauche** pour se déplacer dans les quatre directions (tangage et
+ * roulis), manche **droit** pour l'altitude et l'orientation (gaz et lacet).
+ * Plus naturel pour qui a tenu une manette qu'une disposition de
+ * radiocommande.
  */
 export function combineSticks(
   left: Point,
@@ -17,10 +19,10 @@ export function combineSticks(
   deadzone: number = DEFAULT_DEADZONE,
 ): Axes {
   return {
-    roll: applyDeadzone(right.x, deadzone),
-    pitch: applyDeadzone(right.y, deadzone),
-    yaw: applyDeadzone(left.x, deadzone),
-    gaz: applyDeadzone(left.y, deadzone),
+    roll: applyDeadzone(left.x, deadzone),
+    pitch: applyDeadzone(left.y, deadzone),
+    yaw: applyDeadzone(right.x, deadzone),
+    gaz: applyDeadzone(right.y, deadzone),
   };
 }
 
