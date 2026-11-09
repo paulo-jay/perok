@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b0e14" />
+
+  <!-- bras -->
+  <g stroke="#2a3344" stroke-width="26" stroke-linecap="round">
+    <line x1="166" y1="166" x2="346" y2="346" />
+    <line x1="346" y1="166" x2="166" y2="346" />
+  </g>
+
+  <!-- helices -->
+  <g fill="none" stroke="#35c4f0" stroke-width="20">
+    <circle cx="150" cy="150" r="62" />
+    <circle cx="362" cy="150" r="62" />
+    <circle cx="150" cy="362" r="62" />
+    <circle cx="362" cy="362" r="62" />
+  </g>
+
+  <!-- corps -->
+  <rect x="202" y="210" width="108" height="92" rx="26" fill="#35c4f0" />
+
+  <!-- phares du Night -->
+  <g fill="#ffb020">
+    <circle cx="228" cy="320" r="15" />
+    <circle cx="284" cy="320" r="15" />
+  </g>
+</svg>

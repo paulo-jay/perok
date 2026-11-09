@@ -8,6 +8,9 @@
     />
     <meta name="theme-color" content="#0b0e14" />
     <title>Perok</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
@@ -55,5 +58,15 @@
     </main>
 
     <script type="module" src="dist/ui/app.js"></script>
+    <script>
+      // Chemin relatif : la portée doit suivre le sous-chemin de GitHub Pages.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js').catch((error) => {
+            console.error('Service worker non enregistre', error);
+          });
+        });
+      }
+    </script>
   </body>
 </html>
